@@ -34,7 +34,7 @@ class ReceiptBotStack(Stack):
         if not bot_token:
             # For bootstrap or synth, use placeholder
             bot_token = "placeholder_token_for_bootstrap"
-            print("⚠️ No bot token found. Set TELEGRAM_BOT_TOKEN in .env file or use: cdk deploy -c telegram_bot_token=YOUR_TOKEN")
+            print("⚠️  No bot token found. Set TELEGRAM_BOT_TOKEN in .env file or use: cdk deploy -c telegram_bot_token=YOUR_TOKEN")
         else:
             print("✅ Bot token loaded successfully")
         
@@ -85,7 +85,7 @@ class ReceiptBotStack(Stack):
             bucket_name=f"receipt-images-{self.account}-{self.region}",
             removal_policy=RemovalPolicy.DESTROY,  # For MVP - allows easy cleanup
             auto_delete_objects=True,  # For MVP - removes objects on stack deletion
-            versioned=False, 
+            versioned=False,  # Fixed: was 'versioning'
             public_read_access=False,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             encryption=s3.BucketEncryption.S3_MANAGED,
@@ -112,7 +112,7 @@ class ReceiptBotStack(Stack):
                 name="user_id", 
                 type=dynamodb.AttributeType.STRING
             ),
-            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST, 
+            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,  # Serverless pricing
             removal_policy=RemovalPolicy.DESTROY,  # For MVP - allows easy cleanup
             point_in_time_recovery=False  # Disable for MVP to save costs
             # Note: GSI can be added later via console if needed for querying
@@ -174,7 +174,9 @@ class ReceiptBotStack(Stack):
                     image=_lambda.Runtime.PYTHON_3_12.bundling_image,
                     command=[
                         "bash", "-c",
-                        "pip install -r requirements.txt -t /asset-output && cp -r . /asset-output"
+                        "pip install -r requirements.txt -t /asset-output && "
+                        "cp -r . /asset-output && "
+                        "find /asset-output -name '__pycache__' -type d -exec rm -rf {} + || true"
                     ]
                 )
             ),
