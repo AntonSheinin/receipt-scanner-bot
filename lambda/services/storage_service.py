@@ -4,6 +4,7 @@ Storage Service - S3 and DynamoDB Operations
 import logging
 from datetime import datetime, timezone
 from typing import Optional, List, Dict
+from boto3.dynamodb.conditions import Key, Attr
 
 from config import get_s3_client, get_receipts_table, S3_BUCKET_NAME
 from utils.helpers import convert_decimals
@@ -55,12 +56,12 @@ class StorageService:
                 return False
             
             item = {
-                'receipt_id': receipt_id,
-                'user_id': user_id,
+                'user_id': user_id,  # Partition key
+                'receipt_id': receipt_id,  # Sort key
                 'created_at': datetime.now(timezone.utc).isoformat(),
                 'image_url': image_url,
-                'store_name': receipt_data.get('store_name'),
-                'date': receipt_data.get('date'),
+                'store_name': receipt_data.get('store_name', ''),
+                'date': receipt_data.get('date', ''),
                 'receipt_number': receipt_data.get('receipt_number'),
                 'total': receipt_data.get('total'),
                 'items': receipt_data.get('items', []),
@@ -85,37 +86,103 @@ class StorageService:
                 logger.error("DynamoDB table not configured")
                 return []
             
-            # Build DynamoDB filter
-            filter_expressions = ["user_id = :user_id"]
-            expression_values = {":user_id": user_id}
-            
             filter_params = query_plan.get("filter", {})
+            receipts = []
             
-            # Date range filter
+            # Check if we can use an index for efficient querying
             if "date_range" in filter_params:
-                filter_expressions.append("created_at BETWEEN :start_date AND :end_date")
-                expression_values[":start_date"] = filter_params["date_range"]["start"] + "T00:00:00"
-                expression_values[":end_date"] = filter_params["date_range"]["end"] + "T23:59:59"
+                receipts = self._query_by_date_range(user_id, filter_params["date_range"])
+            elif "store_names" in filter_params and filter_params["store_names"]:
+                receipts = self._query_by_store_names(user_id, filter_params["store_names"])
+            else:
+                # Fall back to scanning all user receipts
+                receipts = self._scan_user_receipts(user_id)
             
-            # Store name filter
-            if "store_names" in filter_params and filter_params["store_names"]:
-                store_conditions = []
-                for i, store in enumerate(filter_params["store_names"]):
-                    store_conditions.append(f"contains(store_name, :store_{i})")
-                    expression_values[f":store_{i}"] = store
-                filter_expressions.append(f"({' OR '.join(store_conditions)})")
+            # Apply additional filters
+            receipts = self._apply_additional_filters(receipts, filter_params)
             
-            # Execute DynamoDB scan
-            response = self.receipts_table.scan(
-                FilterExpression=" AND ".join(filter_expressions),
-                ExpressionAttributeValues=expression_values
-            )
-            
-            receipts = convert_decimals(response.get('Items', []))
-            logger.info(f"Found {len(receipts)} receipts from DynamoDB")
-            
+            logger.info(f"Found {len(receipts)} receipts for user {user_id}")
             return receipts
             
         except Exception as e:
             logger.error(f"DynamoDB query error: {e}")
             return []
+    
+    def _query_by_date_range(self, user_id: str, date_range: Dict) -> List[Dict]:
+        """Query receipts by date range using DateIndex"""
+        try:
+            start_date = date_range.get("start", "1900-01-01")
+            end_date = date_range.get("end", "2099-12-31")
+            
+            response = self.receipts_table.query(
+                IndexName="DateIndex",
+                KeyConditionExpression=Key('user_id').eq(user_id) & Key('date').between(start_date, end_date)
+            )
+            
+            return convert_decimals(response.get('Items', []))
+            
+        except Exception as e:
+            logger.error(f"Date range query error: {e}")
+            return self._scan_user_receipts(user_id)  # Fallback
+    
+    def _query_by_store_names(self, user_id: str, store_names: List[str]) -> List[Dict]:
+        """Query receipts by store names using StoreIndex"""
+        try:
+            all_receipts = []
+            
+            for store_name in store_names:
+                response = self.receipts_table.query(
+                    IndexName="StoreIndex",
+                    KeyConditionExpression=Key('user_id').eq(user_id),
+                    FilterExpression=Attr('store_name').contains(store_name)
+                )
+                all_receipts.extend(response.get('Items', []))
+            
+            # Remove duplicates based on receipt_id
+            seen_ids = set()
+            unique_receipts = []
+            for receipt in all_receipts:
+                if receipt['receipt_id'] not in seen_ids:
+                    seen_ids.add(receipt['receipt_id'])
+                    unique_receipts.append(receipt)
+            
+            return convert_decimals(unique_receipts)
+            
+        except Exception as e:
+            logger.error(f"Store name query error: {e}")
+            return self._scan_user_receipts(user_id)  # Fallback
+    
+    def _scan_user_receipts(self, user_id: str) -> List[Dict]:
+        """Scan all receipts for a user (fallback method)"""
+        try:
+            response = self.receipts_table.query(
+                KeyConditionExpression=Key('user_id').eq(user_id)
+            )
+            
+            return convert_decimals(response.get('Items', []))
+            
+        except Exception as e:
+            logger.error(f"User receipts scan error: {e}")
+            return []
+    
+    def _apply_additional_filters(self, receipts: List[Dict], filters: Dict) -> List[Dict]:
+        """Apply additional filters to receipts"""
+        try:
+            filtered_receipts = receipts
+            
+            # Filter by price range on total
+            if "price_range" in filters:
+                price_range = filters["price_range"]
+                min_price = price_range.get("min", 0)
+                max_price = price_range.get("max", float('inf'))
+                
+                filtered_receipts = [
+                    receipt for receipt in filtered_receipts
+                    if min_price <= float(receipt.get('total', 0)) <= max_price
+                ]
+            
+            return filtered_receipts
+            
+        except Exception as e:
+            logger.error(f"Additional filter error: {e}")
+            return receipts

@@ -3,6 +3,7 @@ Main Telegram Lambda Handler - Entry Point
 """
 import json
 import logging
+import os
 from typing import Dict, Any
 
 from config import setup_logging
@@ -25,9 +26,21 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
         logger.info(f"Received event: {json.dumps(event, default=str)}")
         
+        # Handle API Gateway health check
+        if event.get('httpMethod') == 'GET':
+            return create_response(200, {"status": "ok", "message": "Telegram webhook endpoint"})
+        
         # Parse Telegram update
-        body = json.loads(event.get('body', '{}'))
+        body_str = event.get('body', '{}')
+        if isinstance(body_str, str):
+            body = json.loads(body_str)
+        else:
+            body = body_str
+            
+        logger.info(f"Parsed body: {json.dumps(body, default=str)}")
+        
         if 'message' not in body:
+            logger.info("No message in update, ignoring")
             return create_response(200, {"status": "no message"})
         
         message = body['message']
@@ -54,6 +67,11 @@ def process_text_message(message: Dict, chat_id: int) -> Dict:
         welcome_msg = get_welcome_message()
         telegram_service.send_message(chat_id, welcome_msg)
         return create_response(200, {"status": "handled"})
+    elif text.lower() == '/webhook':
+        # Admin command to check webhook status
+        webhook_info = check_webhook_status()
+        telegram_service.send_message(chat_id, f"🔗 Webhook Status:\n```{webhook_info}```")
+        return create_response(200, {"status": "handled"})
     else:
         return query_service.process_query(text, str(chat_id))
 
@@ -79,10 +97,34 @@ def get_welcome_message() -> str:
     )
 
 
+def check_webhook_status() -> str:
+    """Check current webhook status"""
+    try:
+        bot_token = os.environ.get('TELEGRAM_BOT_TOKEN')
+        if not bot_token:
+            return "Bot token not configured"
+        
+        import requests
+        response = requests.get(f"https://api.telegram.org/bot{bot_token}/getWebhookInfo")
+        if response.status_code == 200:
+            result = response.json().get('result', {})
+            return (
+                f"URL: {result.get('url', 'Not set')}\n"
+                f"Pending: {result.get('pending_update_count', 0)}\n"
+                f"Last Error: {result.get('last_error_message', 'None')}"
+            )
+        return f"Error: {response.status_code}"
+    except Exception as e:
+        return f"Error checking webhook: {e}"
+
+
 def create_response(status_code: int, body: Dict[str, Any]) -> Dict[str, Any]:
-    """Create Lambda response"""
+    """Create Lambda response in API Gateway format"""
     return {
         "statusCode": status_code,
-        "headers": {"Content-Type": "application/json"},
-        "body": json.dumps(body)
+        "headers": {
+            "Content-Type": "application/json"
+        },
+        "body": json.dumps(body),
+        "isBase64Encoded": False
     }
