@@ -16,11 +16,23 @@ def lambda_handler(event, context) -> dict:
     telegram_bot = TelegramAPI(bot_token)
     response_data = {}
     response_status = "SUCCESS"
+    
     try:
         if request_type in ('Create', 'Update'):
-            response_data = telegram_bot.set_webhook(webhook_url)
+            # Set webhook
+            webhook_response = telegram_bot.set_webhook(webhook_url)
+            
+            # Set bot commands
+            commands_response = telegram_bot.set_bot_commands()
+            
+            response_data = {
+                'webhook': webhook_response,
+                'commands': commands_response
+            }
+            
         elif request_type == 'Delete':
             response_data = telegram_bot.delete_webhook()
+            
     except Exception as e:
         print(f"Error: {e}")
         response_status = "FAILED"

@@ -10,8 +10,8 @@ from .storage_service import StorageService
 from utils.llm_client import LLMClient
 from utils.helpers import create_response
 
-logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
 
 class QueryService:
     """Service for natural language query processing"""
@@ -106,7 +106,7 @@ Examples:
 "How many receipts from Rami Levy?" → store_names: ["Rami Levy"], aggregation: "count_receipts"
 "How much did I spend last month?" → date_range: last month, aggregation: "sum_total"
 
-Return ONLY the JSON object, no explanations."""
+Return ONLY the JSON object, no explanations, no markdown"""
 
             return self.llm.generate_query_plan(prompt)
             

@@ -3,7 +3,7 @@ Receipt Processing Service
 """
 import logging
 import uuid
-from typing import Dict, Optional
+from typing import Dict
 
 from .telegram_service import TelegramService
 from .storage_service import StorageService

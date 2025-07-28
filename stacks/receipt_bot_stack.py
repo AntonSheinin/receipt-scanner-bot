@@ -1,8 +1,9 @@
 """
-Receipt Bot Stack - AWS CDK Infrastructure
+    Receipt Bot Stack - AWS CDK Infrastructure
 """
+
 import os
-from typing import Dict, Any
+from typing import Any
 import aws_cdk as cdk
 from aws_cdk import (
     Stack,
@@ -21,9 +22,8 @@ from aws_cdk import (
 from constructs import Construct
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
 
+load_dotenv()
 
 class ReceiptBotStack(Stack):
     
@@ -231,19 +231,14 @@ class ReceiptBotStack(Stack):
     
     def _create_webhook_setter_lambda(self) -> _lambda.Function:
         """Create Lambda function for webhook setup"""
+        
         log_group = logs.LogGroup(
             self, "WebhookSetterLogGroup",
             log_group_name="/aws/lambda/WebhookSetter",
             retention=logs.RetentionDays.ONE_WEEK,
             removal_policy=RemovalPolicy.DESTROY
         )
-
-        bundling_command = (
-            "pip install urllib3 -t /asset-output && "
-            "cp -r . /asset-output && "
-            "find /asset-output -name '__pycache__' -type d -exec rm -rf {} + || true"
-        )
-
+        
         return _lambda.Function(
             self, "WebhookSetterHandler",
             runtime=_lambda.Runtime.PYTHON_3_12,
@@ -252,7 +247,12 @@ class ReceiptBotStack(Stack):
                 "lambda",
                 bundling=cdk.BundlingOptions(
                     image=_lambda.Runtime.PYTHON_3_12.bundling_image,
-                    command=["bash", "-c", bundling_command]
+                    command=[
+                        "bash", "-c",
+                        "pip install urllib3 -t /asset-output && "
+                        "cp -r . /asset-output && "
+                        "find /asset-output -name '__pycache__' -type d -exec rm -rf {} + || true"
+                    ]
                 )
             ),
             timeout=Duration.minutes(2),

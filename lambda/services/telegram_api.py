@@ -89,3 +89,34 @@ class TelegramAPI:
         except Exception as e:
             print(f"Error getting webhook info: {e}")
             return {}
+    
+    def set_bot_commands(self) -> Dict[str, Any]:
+        """Set bot commands for Telegram UI"""
+        try:
+            commands = [
+                {"command": "start", "description": "Start the bot and show welcome message"},
+                {"command": "help", "description": "Show help information"},
+                {"command": "delete_last", "description": "Delete your most recent receipt"},
+                {"command": "delete_all", "description": "Delete all your receipts"},
+            ]
+            
+            print(f"Setting bot commands: {commands}")
+            
+            response = self.http.request(
+                'POST',
+                f"{self.base_url}/setMyCommands",
+                body=json.dumps({"commands": commands}),
+                headers={'Content-Type': 'application/json'}
+            )
+            
+            result = json.loads(response.data.decode('utf-8'))
+            print(f"Set commands result: {result}")
+            
+            if result.get('ok'):
+                return {'success': True, 'message': 'Bot commands set successfully'}
+            else:
+                raise Exception(f"Failed to set commands: {result.get('description', 'Unknown error')}")
+                
+        except Exception as e:
+            print(f"Error setting bot commands: {e}")
+            raise

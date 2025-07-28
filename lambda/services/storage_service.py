@@ -186,3 +186,107 @@ class StorageService:
         except Exception as e:
             logger.error(f"Additional filter error: {e}")
             return receipts
+        
+    def delete_last_receipt(self, user_id: str) -> Optional[Dict]:
+        """Delete the most recently created receipt for a user"""
+        try:
+            if not self.receipts_table:
+                logger.error("DynamoDB table not configured")
+                return None
+            
+            # Get the most recent receipt
+            response = self.receipts_table.query(
+                KeyConditionExpression=Key('user_id').eq(user_id),
+                ScanIndexForward=False,  # Sort in descending order
+                Limit=1
+            )
+            
+            items = response.get('Items', [])
+            if not items:
+                return None
+            
+            last_receipt = convert_decimals(items[0])
+            receipt_id = last_receipt['receipt_id']
+            
+            # Delete from DynamoDB
+            self.receipts_table.delete_item(
+                Key={
+                    'user_id': user_id,
+                    'receipt_id': receipt_id
+                }
+            )
+            
+            # Delete image from S3 if exists
+            image_url = last_receipt.get('image_url')
+            if image_url and image_url.startswith('s3://'):
+                self._delete_s3_image(image_url)
+            
+            logger.info(f"Deleted receipt: {receipt_id} for user: {user_id}")
+            return last_receipt
+            
+        except Exception as e:
+            logger.error(f"Delete last receipt error: {e}")
+            return None
+
+    def delete_all_receipts(self, user_id: str) -> int:
+        """Delete all receipts for a user"""
+        try:
+            if not self.receipts_table:
+                logger.error("DynamoDB table not configured")
+                return 0
+            
+            # Get all receipts for the user
+            response = self.receipts_table.query(
+                KeyConditionExpression=Key('user_id').eq(user_id)
+            )
+            
+            items = response.get('Items', [])
+            if not items:
+                return 0
+            
+            deleted_count = 0
+            
+            # Delete each receipt
+            with self.receipts_table.batch_writer() as batch:
+                for item in items:
+                    batch.delete_item(
+                        Key={
+                            'user_id': user_id,
+                            'receipt_id': item['receipt_id']
+                        }
+                    )
+                    
+                    # Delete image from S3 if exists
+                    image_url = item.get('image_url')
+                    if image_url and image_url.startswith('s3://'):
+                        self._delete_s3_image(image_url)
+                    
+                    deleted_count += 1
+            
+            logger.info(f"Deleted {deleted_count} receipts for user: {user_id}")
+            return deleted_count
+            
+        except Exception as e:
+            logger.error(f"Delete all receipts error: {e}")
+            return 0
+
+    def _delete_s3_image(self, s3_url: str) -> bool:
+        """Delete image from S3"""
+        try:
+            if not S3_BUCKET_NAME:
+                return False
+            
+            # Extract key from s3://bucket/key format
+            s3_key = s3_url.replace(f"s3://{S3_BUCKET_NAME}/", "")
+            
+            self.s3_client.delete_object(
+                Bucket=S3_BUCKET_NAME,
+                Key=s3_key
+            )
+            
+            logger.info(f"Deleted S3 image: {s3_key}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"S3 delete error: {e}")
+            return False

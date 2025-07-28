@@ -25,11 +25,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Main Lambda handler for Telegram webhook"""
     try:
         logger.info(f"Received event: {json.dumps(event, default=str)}")
-
-        # Health check
+        
+        # Handle API Gateway health check
         if event.get('httpMethod') == 'GET':
             return create_response(200, {"status": "ok", "message": "Telegram webhook endpoint"})
-
+        
         # Parse Telegram update
         body = event.get('body', '{}')
         if isinstance(body, str):
@@ -57,13 +57,17 @@ def process_text_message(message: Dict, chat_id: int) -> Dict:
     """Route text messages to appropriate handler"""
     text = message.get('text', '').strip()
     lower_text = text.lower()
+    
     if lower_text in ('/start', '/help'):
         telegram_service.send_message(chat_id, get_welcome_message())
         return create_response(200, {"status": "handled"})
-    if lower_text == '/webhook':
-        webhook_info = check_webhook_status()
-        telegram_service.send_message(chat_id, f"🔗 Webhook Status:\n```{webhook_info}```")
-        return create_response(200, {"status": "handled"})
+    
+    if lower_text == '/delete_last':
+        return handle_delete_last_command(chat_id)
+    
+    if lower_text == '/delete_all':
+        return handle_delete_all_command(chat_id)
+    
     return query_service.process_query(text, str(chat_id))
 
 
@@ -84,30 +88,14 @@ def get_welcome_message() -> str:
         "• \"Which store has the cheapest milk?\"\n"
         "• \"Show me all receipts from Rami Levy\"\n"
         "• \"How many times did I shop last month?\"\n\n"
+        "🤖 *Available Commands:*\n"
+        "• /start - Show this welcome message\n"
+        "• /help - Show this help information\n"
+        "• /delete_last - Delete your most recent receipt\n"
+        "• /delete_all - Delete all your receipts\n\n"
+        "💡 *Tip:* Type '/' to see all available commands in the menu!\n\n"
         "Just send a clear photo of your receipt! 📸"
     )
-
-
-def check_webhook_status() -> str:
-    """Check current webhook status"""
-    try:
-        bot_token = os.environ.get('TELEGRAM_BOT_TOKEN')
-        if not bot_token:
-            return "Bot token not configured"
-        
-        import requests
-        response = requests.get(f"https://api.telegram.org/bot{bot_token}/getWebhookInfo")
-        if response.status_code == 200:
-            result = response.json().get('result', {})
-            return (
-                f"URL: {result.get('url', 'Not set')}\n"
-                f"Pending: {result.get('pending_update_count', 0)}\n"
-                f"Last Error: {result.get('last_error_message', 'None')}"
-            )
-        return f"Error: {response.status_code}"
-    except Exception as e:
-        return f"Error checking webhook: {e}"
-
 
 def create_response(status_code: int, body: Dict[str, Any]) -> Dict[str, Any]:
     """Create Lambda response in API Gateway format"""
@@ -119,3 +107,64 @@ def create_response(status_code: int, body: Dict[str, Any]) -> Dict[str, Any]:
         "body": json.dumps(body),
         "isBase64Encoded": False
     }
+
+def handle_delete_last_command(chat_id: int) -> Dict:
+    """Handle /delete-last command"""
+    try:
+        from services.storage_service import StorageService
+        storage_service = StorageService()
+        
+        telegram_service.send_typing(chat_id)
+        
+        deleted_receipt = storage_service.delete_last_receipt(str(chat_id))
+        
+        if deleted_receipt:
+            store_name = deleted_receipt.get('store_name', 'Unknown Store')
+            date = deleted_receipt.get('date', 'Unknown Date')
+            total = deleted_receipt.get('total', '0.00')
+            
+            message = (
+                "🗑️ *Last Receipt Deleted Successfully*\n\n"
+                f"🏪 Store: {store_name}\n"
+                f"📅 Date: {date}\n"
+                f"💰 Total: ${total}\n"
+                f"🆔 Receipt ID: `{deleted_receipt['receipt_id']}`"
+            )
+        else:
+            message = "❌ No receipts found to delete. Upload some receipts first!"
+        
+        telegram_service.send_message(chat_id, message)
+        return create_response(200, {"status": "handled"})
+        
+    except Exception as e:
+        logger.error(f"Delete last command error: {e}")
+        telegram_service.send_message(chat_id, "❌ Error deleting receipt. Please try again.")
+        return create_response(200, {"status": "error"})
+
+def handle_delete_all_command(chat_id: int) -> Dict:
+    """Handle /delete-all command"""
+    try:
+        from services.storage_service import StorageService
+        storage_service = StorageService()
+        
+        telegram_service.send_typing(chat_id)
+        telegram_service.send_message(chat_id, "🗑️ Deleting all receipts... Please wait.")
+        
+        deleted_count = storage_service.delete_all_receipts(str(chat_id))
+        
+        if deleted_count > 0:
+            message = (
+                "🗑️ *All Receipts Deleted Successfully*\n\n"
+                f"📊 Total deleted: {deleted_count} receipts\n"
+                "💾 All associated images have been removed from storage"
+            )
+        else:
+            message = "❌ No receipts found to delete. Your storage is already empty!"
+        
+        telegram_service.send_message(chat_id, message)
+        return create_response(200, {"status": "handled"})
+        
+    except Exception as e:
+        logger.error(f"Delete all command error: {e}")
+        telegram_service.send_message(chat_id, "❌ Error deleting receipts. Please try again.")
+        return create_response(200, {"status": "error"})
