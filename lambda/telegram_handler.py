@@ -25,35 +25,29 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Main Lambda handler for Telegram webhook"""
     try:
         logger.info(f"Received event: {json.dumps(event, default=str)}")
-        
-        # Handle API Gateway health check
+
+        # Health check
         if event.get('httpMethod') == 'GET':
             return create_response(200, {"status": "ok", "message": "Telegram webhook endpoint"})
-        
+
         # Parse Telegram update
-        body_str = event.get('body', '{}')
-        if isinstance(body_str, str):
-            body = json.loads(body_str)
-        else:
-            body = body_str
-            
+        body = event.get('body', '{}')
+        if isinstance(body, str):
+            body = json.loads(body)
         logger.info(f"Parsed body: {json.dumps(body, default=str)}")
-        
-        if 'message' not in body:
+
+        message = body.get('message')
+        if not message:
             logger.info("No message in update, ignoring")
             return create_response(200, {"status": "no message"})
-        
-        message = body['message']
+
         chat_id = message['chat']['id']
-        
-        # Route to appropriate service
         if 'photo' in message:
             return receipt_service.process_receipt(message, chat_id)
-        elif 'text' in message:
+        if 'text' in message:
             return process_text_message(message, chat_id)
-        
         return create_response(200, {"status": "unsupported"})
-        
+
     except Exception as e:
         logger.error(f"Handler error: {e}", exc_info=True)
         return create_response(500, {"error": str(e)})
@@ -62,18 +56,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 def process_text_message(message: Dict, chat_id: int) -> Dict:
     """Route text messages to appropriate handler"""
     text = message.get('text', '').strip()
-    
-    if text.lower() in ['/start', '/help']:
-        welcome_msg = get_welcome_message()
-        telegram_service.send_message(chat_id, welcome_msg)
+    lower_text = text.lower()
+    if lower_text in ('/start', '/help'):
+        telegram_service.send_message(chat_id, get_welcome_message())
         return create_response(200, {"status": "handled"})
-    elif text.lower() == '/webhook':
-        # Admin command to check webhook status
+    if lower_text == '/webhook':
         webhook_info = check_webhook_status()
         telegram_service.send_message(chat_id, f"🔗 Webhook Status:\n```{webhook_info}```")
         return create_response(200, {"status": "handled"})
-    else:
-        return query_service.process_query(text, str(chat_id))
+    return query_service.process_query(text, str(chat_id))
 
 
 def get_welcome_message() -> str:

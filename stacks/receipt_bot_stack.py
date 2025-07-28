@@ -231,14 +231,19 @@ class ReceiptBotStack(Stack):
     
     def _create_webhook_setter_lambda(self) -> _lambda.Function:
         """Create Lambda function for webhook setup"""
-        
         log_group = logs.LogGroup(
             self, "WebhookSetterLogGroup",
             log_group_name="/aws/lambda/WebhookSetter",
             retention=logs.RetentionDays.ONE_WEEK,
             removal_policy=RemovalPolicy.DESTROY
         )
-        
+
+        bundling_command = (
+            "pip install urllib3 -t /asset-output && "
+            "cp -r . /asset-output && "
+            "find /asset-output -name '__pycache__' -type d -exec rm -rf {} + || true"
+        )
+
         return _lambda.Function(
             self, "WebhookSetterHandler",
             runtime=_lambda.Runtime.PYTHON_3_12,
@@ -247,12 +252,7 @@ class ReceiptBotStack(Stack):
                 "lambda",
                 bundling=cdk.BundlingOptions(
                     image=_lambda.Runtime.PYTHON_3_12.bundling_image,
-                    command=[
-                        "bash", "-c",
-                        "pip install urllib3 -t /asset-output && "
-                        "cp -r . /asset-output && "
-                        "find /asset-output -name '__pycache__' -type d -exec rm -rf {} + || true"
-                    ]
+                    command=["bash", "-c", bundling_command]
                 )
             ),
             timeout=Duration.minutes(2),
