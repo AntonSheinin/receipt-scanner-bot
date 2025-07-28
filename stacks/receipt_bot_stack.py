@@ -138,7 +138,18 @@ class ReceiptBotStack(Stack):
             self, "TelegramHandler",
             runtime=_lambda.Runtime.PYTHON_3_12,
             handler="telegram_handler.lambda_handler",
-            code=_lambda.Code.from_asset("lambda"),
+            code=_lambda.Code.from_asset(
+                "lambda",
+                bundling=cdk.BundlingOptions(
+                    image=_lambda.Runtime.PYTHON_3_12.bundling_image,
+                    command=[
+                        "bash", "-c",
+                        "pip install -r requirements.txt -t /asset-output && "
+                        "cp -r . /asset-output && "
+                        "find /asset-output -name '__pycache__' -type d -exec rm -rf {} + || true"
+                    ]
+                )
+            ),
             role=role,
             timeout=Duration.minutes(5),
             environment={
@@ -147,7 +158,8 @@ class ReceiptBotStack(Stack):
                 "S3_BUCKET_NAME": bucket.bucket_name,
                 "DYNAMODB_TABLE_NAME": table.table_name
             },
-            log_group=log_group
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.TEXT
         )
     
     def _create_api_gateway(self, lambda_func: _lambda.Function, log_group: logs.LogGroup) -> apigateway.RestApi:
@@ -208,11 +220,23 @@ class ReceiptBotStack(Stack):
             self, "WebhookSetterHandler",
             runtime=_lambda.Runtime.PYTHON_3_12,
             handler="webhook_setter_handler.lambda_handler",
-            code=_lambda.Code.from_asset("lambda"),
+            code=_lambda.Code.from_asset(
+                "lambda",
+                bundling=cdk.BundlingOptions(
+                    image=_lambda.Runtime.PYTHON_3_12.bundling_image,
+                    command=[
+                        "bash", "-c",
+                        "pip install urllib3 -t /asset-output && "
+                        "cp -r . /asset-output && "
+                        "find /asset-output -name '__pycache__' -type d -exec rm -rf {} + || true"
+                    ]
+                )
+            ),
             timeout=Duration.minutes(2),
-            log_group=log_group
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.TEXT
         )
-    
+        
     def _create_outputs(self, api_gateway: apigateway.RestApi, bucket: s3.Bucket, table: dynamodb.Table, bot_token: str, log_group: logs.LogGroup) -> None:
         """Create stack outputs"""
         
