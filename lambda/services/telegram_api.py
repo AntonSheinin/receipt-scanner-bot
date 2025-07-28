@@ -21,33 +21,41 @@ class TelegramAPI:
             webhook_data = {
                 'url': webhook_url,
                 'max_connections': 40,
-                'allowed_updates': ['message', 'callback_query']
+                'allowed_updates': ['message', 'callback_query'],
+                'drop_pending_updates': True  # Clear any pending updates
             }
             
             response = self.http.request(
                 'POST',
                 f"{self.base_url}/setWebhook",
                 body=json.dumps(webhook_data),
-                headers={'Content-Type': 'application/json'}
+                headers={'Content-Type': 'application/json'},
+                timeout=30.0
             )
             
-            result = json.loads(response.data.decode('utf-8'))
-            print(f"Set webhook result: {result}")
+            if response.status != 200:
+                raise Exception(f"HTTP {response.status}: {response.data.decode('utf-8')}")
             
-            if result.get('ok'):
-                # Verify webhook was set correctly
-                verification = self.get_webhook_info()
-                if verification.get('url') == webhook_url:
-                    print("✅ Webhook verified successfully")
-                    return {'success': True, 'message': 'Webhook set and verified'}
-                else:
-                    raise Exception(f"Webhook verification failed. Expected: {webhook_url}, Got: {verification.get('url')}")
-            else:
-                raise Exception(f"Failed to set webhook: {result.get('description', 'Unknown error')}")
-                
+            result = json.loads(response.data.decode('utf-8'))
+            print(f"Webhook result: {result}")
+            
+            if not result.get('ok'):
+                raise Exception(f"Webhook setup failed: {result.get('description', 'Unknown error')}")
+            
+            # Verify webhook was set
+            verification = self.get_webhook_info()
+            expected_url = webhook_url
+            actual_url = verification.get('url', '')
+            
+            if actual_url != expected_url:
+                raise Exception(f"Webhook verification failed. Expected: {expected_url}, Got: {actual_url}")
+            
+            print("✅ Webhook set and verified successfully")
+            return {'success': True, 'message': 'Webhook set and verified'}
+            
         except Exception as e:
-            print(f"Error setting webhook: {e}")
-            raise
+            print(f"FAILED to set webhook: {e}")
+            raise Exception(f"Webhook setup failed: {str(e)}")
     
     def delete_webhook(self) -> Dict[str, Any]:
         """Delete Telegram webhook"""
@@ -100,23 +108,28 @@ class TelegramAPI:
                 {"command": "delete_all", "description": "Delete all your receipts"},
             ]
             
-            print(f"Setting bot commands: {commands}")
+            print(f"Setting {len(commands)} bot commands")
             
             response = self.http.request(
                 'POST',
                 f"{self.base_url}/setMyCommands",
                 body=json.dumps({"commands": commands}),
-                headers={'Content-Type': 'application/json'}
+                headers={'Content-Type': 'application/json'},
+                timeout=30.0  # Add timeout
             )
             
-            result = json.loads(response.data.decode('utf-8'))
-            print(f"Set commands result: {result}")
+            if response.status != 200:
+                raise Exception(f"HTTP {response.status}: {response.data.decode('utf-8')}")
             
-            if result.get('ok'):
-                return {'success': True, 'message': 'Bot commands set successfully'}
-            else:
-                raise Exception(f"Failed to set commands: {result.get('description', 'Unknown error')}")
+            result = json.loads(response.data.decode('utf-8'))
+            print(f"Telegram API response: {result}")
+            
+            if not result.get('ok'):
+                raise Exception(f"Telegram API error: {result.get('description', 'Unknown error')}")
+            
+            print("✅ Bot commands set successfully")
+            return {'success': True, 'message': 'Bot commands set successfully'}
                 
         except Exception as e:
-            print(f"Error setting bot commands: {e}")
-            raise
+            print(f"FAILED to set bot commands: {e}")
+            raise Exception(f"Command setup failed: {str(e)}")

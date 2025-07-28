@@ -133,7 +133,7 @@ class StorageService:
             for store_name in store_names:
                 response = self.receipts_table.query(
                     IndexName="StoreIndex",
-                    KeyConditionExpression=Key('user_id').eq(user_id),
+                    KeyConditionExpression=Key('user_id').eq(user_id) & Key('store_name').eq(store_name),
                     FilterExpression=Attr('store_name').contains(store_name)
                 )
                 all_receipts.extend(response.get('Items', []))

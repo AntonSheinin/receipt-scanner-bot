@@ -93,7 +93,10 @@ class ReceiptService:
                         name = name[:MAX_ITEM_NAME_LENGTH-3] + "..."
                     
                     price = item.get('price', 0)
-                    quantity = item.get('quantity', 1)
+                    try:
+                        quantity = int(item.get('quantity', 1))
+                    except (ValueError, TypeError):
+                        quantity = 1
                     category = item.get('category', '')
                     
                     line = f"• {name}"
