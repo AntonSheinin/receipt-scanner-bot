@@ -154,7 +154,6 @@ class ReceiptBotStack(Stack):
             timeout=Duration.minutes(5),
             environment={
                 "TELEGRAM_BOT_TOKEN": bot_token,
-                "BEDROCK_REGION": self.region,
                 "S3_BUCKET_NAME": bucket.bucket_name,
                 "DYNAMODB_TABLE_NAME": table.table_name
             },

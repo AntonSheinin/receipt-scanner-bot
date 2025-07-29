@@ -54,8 +54,7 @@ class TelegramService:
             largest = max(photos, key=lambda x: x['file_size'])
             
             # Get file info
-            file_response = requests.get(f"{TELEGRAM_API_URL}/getFile", 
-                                       params={"file_id": largest['file_id']})
+            file_response = requests.get(f"{TELEGRAM_API_URL}/getFile", params={"file_id": largest['file_id']})
             file_response.raise_for_status()
             file_info = file_response.json()
             

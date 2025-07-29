@@ -7,7 +7,7 @@ import boto3
 
 # Environment variables
 BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
-BEDROCK_MODEL_ID = os.environ.get('BEDROCK_MODEL_ID', 'eu.anthropic.claude-3-5-sonnet-20240620-v1:0')
+BEDROCK_MODEL_ID = os.environ.get('BEDROCK_MODEL_ID', 'eu.anthropic.claude-3-7-sonnet-20250219-v1:0')
 S3_BUCKET_NAME = os.environ.get('S3_BUCKET_NAME')
 DYNAMODB_TABLE_NAME = os.environ.get('DYNAMODB_TABLE_NAME')
 BEDROCK_REGION = os.environ.get('BEDROCK_REGION', 'eu-west-1')

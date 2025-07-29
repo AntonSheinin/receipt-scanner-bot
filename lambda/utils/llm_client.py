@@ -54,13 +54,16 @@ class LLMClient:
     
     def generate_query_plan(self, prompt: str) -> Optional[Dict]:
         """Generate query plan using LLM"""
+
+        logger.info(f"Generating query plan with model: {BEDROCK_MODEL_ID}")
+        
         try:
             request_body = {
                 "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": 1000,
                 "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}]
             }
-            
+
             response = self.bedrock_client.invoke_model(
                 modelId=BEDROCK_MODEL_ID,
                 body=json.dumps(request_body),
