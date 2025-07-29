@@ -178,7 +178,7 @@ class ReceiptBotStack(Stack):
         webhook_resource = api.root.add_resource("webhook")
         webhook_resource.add_method(
             "POST",
-            apigateway.LambdaIntegration(lambda_func)
+            apigateway.LambdaIntegration(lambda_func, timeout=Duration.seconds(29))
         )
         
         # Grant API Gateway permission to invoke Lambda

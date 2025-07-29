@@ -1,6 +1,7 @@
 """
 Query Processing Service
 """
+import json
 import logging
 from typing import Dict, Optional, List
 from datetime import datetime, timedelta, timezone
@@ -38,7 +39,7 @@ class QueryService:
                 self.telegram.send_message(chat_id, "❌ Couldn't understand your question. Try rephrasing it.")
                 return create_response(200, {"status": "failed"})
             
-            logger.info(f"Query plan: {query_plan}")
+            logger.info(f"Query plan for '{question}': {json.dumps(query_plan, indent=2)}")
             
             # Step 2: Execute and aggregate
             results = self._execute_query(query_plan, user_id)
@@ -46,11 +47,13 @@ class QueryService:
                 self.telegram.send_message(chat_id, "❌ No matching data found. Upload some receipts first!")
                 return create_response(200, {"status": "no_data"})
             
-            logger.info(f"Results: {results['results']}")
+            logger.info(f"Aggregation results: {json.dumps(results['results'], indent=2)}")
             
             # Step 3: Generate response
             self.telegram.send_message(chat_id, "💭 Preparing your answer...")
             response = self.llm.generate_response(question, results)
+
+            logger.info(f"LLM response: {response}")
             
             # Step 4: Send to user
             if response:
@@ -98,16 +101,20 @@ Rules:
 - For "last month" use: {last_month}-01 to {last_month}-31
 - For "this month" use: {current_month}-01 to {current_date.strftime('%Y-%m-%d')}
 - For price comparison questions, use min_price_by_store or max_price_by_store
-- For spending questions, use sum_total or sum_by_category
+- For spending questions WITHOUT category filter, use sum_total
+- For spending questions WITH category filter, use sum_by_category
 - For counting questions, use count_receipts
 - Item keywords should include both English and Hebrew terms when possible
 - Categories: food, beverages, household, electronics, clothing, pharmacy, health, other
 
 Examples:
 "How much did I spend on food in August?" → date_range: August 2025, categories: ["food"], aggregation: "sum_by_category"
+"כמה ביזבזתי על אוכל?" → categories: ["food"], aggregation: "sum_by_category"
+"How much did I spend last month?" → date_range: last month, aggregation: "sum_total"
 "Which store has cheapest milk?" → item_keywords: ["milk", "חלב"], aggregation: "min_price_by_store"
 "How many receipts from Rami Levy?" → store_names: ["Rami Levy"], aggregation: "count_receipts"
-"How much did I spend last month?" → date_range: last month, aggregation: "sum_total"
+
+IMPORTANT: When categories are specified in the filter, ALWAYS use "sum_by_category" aggregation, never "sum_total".
 
 Return ONLY the JSON object, no explanations, no markdown"""
 

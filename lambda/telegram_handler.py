@@ -40,16 +40,25 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             logger.info("No message in update, ignoring")
             return create_response(200, {"status": "no message"})
 
+        # Return success to Telegram immediately
+        response = create_response(200, {"status": "processing"})
+        
+        # Process message after responding to Telegram
         chat_id = message['chat']['id']
-        if 'photo' in message:
-            return receipt_service.process_receipt(message, chat_id)
-        if 'text' in message:
-            return process_text_message(message, chat_id)
-        return create_response(200, {"status": "unsupported"})
+        try:
+            if 'photo' in message:
+                receipt_service.process_receipt(message, chat_id)
+            elif 'text' in message:
+                process_text_message(message, chat_id)
+        except Exception as e:
+            logger.error(f"Processing error: {e}", exc_info=True)
+            telegram_service.send_message(chat_id, "❌ An error occurred while processing your request.")
+        
+        return response
 
     except Exception as e:
         logger.error(f"Handler error: {e}", exc_info=True)
-        return create_response(500, {"error": str(e)})
+        return create_response(200, {"status": "error"})  # Always return 200 to prevent retries
 
 
 def process_text_message(message: Dict, chat_id: int) -> Dict:
