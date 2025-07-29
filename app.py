@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Receipt Bot MVP - CDK App Entry Point
 """
@@ -20,5 +19,7 @@ ReceiptBotStack(
     env=env,
     description="Receipt Recognition Telegram Bot MVP"
 )
+
+
 
 app.synth()

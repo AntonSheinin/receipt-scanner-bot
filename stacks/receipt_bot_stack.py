@@ -155,7 +155,9 @@ class ReceiptBotStack(Stack):
             environment={
                 "TELEGRAM_BOT_TOKEN": bot_token,
                 "S3_BUCKET_NAME": bucket.bucket_name,
-                "DYNAMODB_TABLE_NAME": table.table_name
+                "DYNAMODB_TABLE_NAME": table.table_name,
+                "BEDROCK_REGION": os.getenv('BEDROCK_REGION'),
+                "BEDROCK_MODEL_ID": os.getenv('BEDROCK_MODEL_ID')
             },
             log_group=log_group,
             logging_format=_lambda.LoggingFormat.TEXT

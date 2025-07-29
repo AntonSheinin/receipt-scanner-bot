@@ -7,10 +7,10 @@ import boto3
 
 # Environment variables
 BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
-BEDROCK_MODEL_ID = os.environ.get('BEDROCK_MODEL_ID', 'eu.anthropic.claude-3-7-sonnet-20250219-v1:0')
+BEDROCK_MODEL_ID = os.environ.get('BEDROCK_MODEL_ID')
 S3_BUCKET_NAME = os.environ.get('S3_BUCKET_NAME')
 DYNAMODB_TABLE_NAME = os.environ.get('DYNAMODB_TABLE_NAME')
-BEDROCK_REGION = os.environ.get('BEDROCK_REGION', 'eu-west-1')
+BEDROCK_REGION = os.environ.get('BEDROCK_REGION')
 
 # Telegram API
 TELEGRAM_API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
@@ -61,7 +61,11 @@ def get_receipts_table():
 
 def setup_logging():
     """Setup logging configuration"""
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(
+        level=logging.INFO,
+        format='[%(levelname)s] %(name)s: %(message)s',
+        force=True
+    )
 
 
 # LLM Prompts

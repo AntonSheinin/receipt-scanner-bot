@@ -6,11 +6,12 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict
 from boto3.dynamodb.conditions import Key, Attr
 
-from config import get_s3_client, get_receipts_table, S3_BUCKET_NAME
+from config import get_s3_client, get_receipts_table, S3_BUCKET_NAME, setup_logging
 from utils.helpers import convert_decimals
 
-logger = logging.getLogger(__name__)
 
+setup_logging()
+logger = logging.getLogger(__name__)
 
 class StorageService:
     """Service for S3 and DynamoDB operations"""

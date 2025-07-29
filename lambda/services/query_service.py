@@ -5,12 +5,15 @@ import logging
 from typing import Dict, Optional, List
 from datetime import datetime, timedelta, timezone
 
+from config import setup_logging
+
 from .telegram_service import TelegramService
 from .storage_service import StorageService
 from utils.llm_client import LLMClient
 from utils.helpers import create_response
 
 
+setup_logging()
 logger = logging.getLogger(__name__)
 
 class QueryService:

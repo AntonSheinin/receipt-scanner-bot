@@ -9,10 +9,11 @@ from .telegram_service import TelegramService
 from .storage_service import StorageService
 from utils.llm_client import LLMClient
 from utils.helpers import create_response
-from config import MAX_ITEMS_DISPLAY, MAX_ITEM_NAME_LENGTH
+from config import MAX_ITEMS_DISPLAY, MAX_ITEM_NAME_LENGTH, setup_logging
 
+
+setup_logging()
 logger = logging.getLogger(__name__)
-
 
 class ReceiptService:
     """Service for receipt processing"""

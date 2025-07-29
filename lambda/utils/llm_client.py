@@ -6,10 +6,11 @@ import logging
 import base64
 from typing import Dict, Optional
 
-from config import get_bedrock_client, BEDROCK_MODEL_ID, RECEIPT_ANALYSIS_PROMPT
+from config import get_bedrock_client, BEDROCK_MODEL_ID, RECEIPT_ANALYSIS_PROMPT, setup_logging
 
+
+setup_logging()
 logger = logging.getLogger(__name__)
-
 
 class LLMClient:
     """Client for LLM interactions"""
@@ -55,8 +56,6 @@ class LLMClient:
     def generate_query_plan(self, prompt: str) -> Optional[Dict]:
         """Generate query plan using LLM"""
 
-        logger.info(f"Generating query plan with model: {BEDROCK_MODEL_ID}")
-        
         try:
             request_body = {
                 "anthropic_version": "bedrock-2023-05-31",
