@@ -26,6 +26,4 @@ ReceiptBotStack(
     description="Receipt Recognition Telegram Bot MVP"
 )
 
-
-
 app.synth()

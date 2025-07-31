@@ -10,7 +10,7 @@ from config import setup_logging
 
 from .telegram_service import TelegramService
 from .storage_service import StorageService
-from utils.llm_client import LLMClient
+from .llm_service import LLMService
 from utils.helpers import create_response
 
 
@@ -23,7 +23,7 @@ class QueryService:
     def __init__(self):
         self.telegram = TelegramService()
         self.storage = StorageService()
-        self.llm = LLMClient()
+        self.llm = LLMService()
     
     def process_query(self, question: str, user_id: str) -> Dict:
         """Handle natural language queries in 4 steps"""

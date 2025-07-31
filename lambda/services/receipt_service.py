@@ -7,7 +7,7 @@ from typing import Dict
 
 from .telegram_service import TelegramService
 from .storage_service import StorageService
-from utils.llm_client import LLMClient
+from .llm_service import LLMService
 from utils.helpers import create_response
 from config import MAX_ITEMS_DISPLAY, MAX_ITEM_NAME_LENGTH, setup_logging
 
@@ -21,7 +21,7 @@ class ReceiptService:
     def __init__(self):
         self.telegram = TelegramService()
         self.storage = StorageService()
-        self.llm = LLMClient()
+        self.llm = LLMService()
     
     def process_receipt(self, message: Dict, chat_id: int) -> Dict:
         """Process receipt photo end-to-end"""
