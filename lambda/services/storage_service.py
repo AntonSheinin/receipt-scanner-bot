@@ -137,8 +137,13 @@ class StorageService:
     def _query_by_date_range(self, user_id: str, date_range: Dict) -> List[Dict]:
         """Query receipts by date range using DateIndex"""
         try:
-            start_date = date_range.get("start", "1900-01-01")
-            end_date = date_range.get("end", "2099-12-31")
+            start_date = date_range.get("start")
+            end_date = date_range.get("end")
+            
+            # Skip if either date is None/null
+            if not start_date or not end_date:
+                logger.info("Date range has null values, falling back to scan")
+                return self._scan_user_receipts(user_id)
             
             response = self.receipts_table.query(
                 IndexName="DateIndex",
@@ -223,18 +228,26 @@ class StorageService:
             filtered_receipts = receipts
             
             # Filter by price range on total
-            if "price_range" in filters:
-                price_range = filters["price_range"]
-                min_price = price_range.get("min", 0)
-                max_price = price_range.get("max", float('inf'))
+            price_range = filters.get("price_range")
+            if price_range and isinstance(price_range, dict):
+                min_price = price_range.get("min")
+                max_price = price_range.get("max")
                 
-                filtered_receipts = [
-                    receipt for receipt in filtered_receipts
-                    if min_price <= float(receipt.get('total', 0)) <= max_price
-                ]
+                # Only apply filter if both min and max are valid numbers
+                if min_price is not None and max_price is not None:
+                    try:
+                        min_price = float(min_price)
+                        max_price = float(max_price)
+                        
+                        filtered_receipts = [
+                            receipt for receipt in filtered_receipts
+                            if min_price <= float(receipt.get('total', 0)) <= max_price
+                        ]
+                    except (ValueError, TypeError) as e:
+                        logger.warning(f"Invalid price range values: {price_range}, error: {e}")
             
             return filtered_receipts
-            
+        
         except Exception as e:
             logger.error(f"Additional filter error: {e}")
             return receipts

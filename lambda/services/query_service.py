@@ -83,34 +83,51 @@ Last month: {last_month}
 
 User question: "{question}"
 
-Generate a JSON query plan with this structure:
+Generate a JSON query plan with this structure - ONLY include fields that are actually needed:
 {{
-    "filter": {{
-        "date_range": {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}},
-        "store_names": ["store1", "store2"],
-        "item_keywords": ["keyword1", "keyword2"],
-        "categories": ["food", "beverages", "household"],
-        "price_range": {{"min": 0, "max": 100}},
-        "payment_methods": ["cash", "credit_card", "other"],
-        "limit": 1
-    }},
-    "aggregation": "sum_total|sum_by_category|min_price_by_store|max_price_by_store|count_receipts|list_stores",
-    "sort_by": "upload_date_desc|upload_date_asc|receipt_date_desc|receipt_date_asc|total_desc|total_asc"
+    "filter": {{}},
+    "aggregation": "count_receipts",
+    "sort_by": "upload_date_desc"
 }}
+
+Available filter fields (only include if relevant):
+- "date_range": {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}}
+- "store_names": ["store1", "store2"]
+- "item_keywords": ["keyword1", "keyword2"] 
+- "categories": ["food", "beverages", "household"]
+- "price_range": {{"min": 10, "max": 100}}
+- "payment_methods": ["cash", "credit_card", "other"]
+- "limit": 1
+
+Available aggregations:
+- "sum_total" - total spending
+- "sum_by_category" - spending by category  
+- "min_price_by_store" - cheapest price by store
+- "max_price_by_store" - most expensive price by store
+- "count_receipts" - count receipts (use for "show me" queries)
+
+Available sort options:
+- "upload_date_desc" - most recently uploaded first
+- "upload_date_asc" - oldest uploaded first  
+- "receipt_date_desc" - most recent purchase date first
+- "receipt_date_asc" - oldest purchase date first
+- "total_desc" - highest amount first
+- "total_asc" - lowest amount first
 
 Rules:
 - For "latest/last uploaded" queries, use sort_by: "upload_date_desc"
-- For "most recent receipt by date" queries, use sort_by: "receipt_date_desc"
-- For "oldest uploaded" queries, use sort_by: "upload_date_asc"
-- For Hebrew queries like "החשבונית האחרונה שהעליתי" (last uploaded), use sort_by: "upload_date_desc"
-- For Hebrew queries like "הקנייה האחרונה" (last purchase by date), use sort_by: "receipt_date_desc"
+- For "most recent purchase" queries, use sort_by: "receipt_date_desc"  
+- For "show me" or "what is" queries, use aggregation: "count_receipts"
+- DO NOT include fields with null values - omit them completely
+- DO NOT include empty arrays - omit them completely
+- Only set limit when you want to restrict results (1-10)
 
 Examples:
-"Show me my last uploaded receipt" → limit: 1, sort_by: "upload_date_desc"
-"What is my most recent purchase?" → limit: 1, sort_by: "receipt_date_desc"
-"מה החשבונית האחרונה שהעליתי?" → limit: 1, sort_by: "upload_date_desc"
-"מה הקנייה האחרונה שלי?" → limit: 1, sort_by: "receipt_date_desc"
-"""
+"Last receipt by upload date" → {{"filter": {{"limit": 1}}, "aggregation": "count_receipts", "sort_by": "upload_date_desc"}}
+"How much did I spend on food?" → {{"filter": {{"categories": ["food"]}}, "aggregation": "sum_by_category"}}
+"Show my 3 biggest purchases" → {{"filter": {{"limit": 3}}, "aggregation": "count_receipts", "sort_by": "total_desc"}}
+
+CRITICAL: Return ONLY the JSON object. Do not include null values or empty arrays. Only include relevant fields."""
 
             return self.llm.generate_query_plan(prompt)
             
@@ -121,6 +138,11 @@ Examples:
     def _execute_query(self, query_plan: Dict, user_id: str) -> Optional[Dict]:
         """Execute query and aggregate results"""
         try:
+
+            # Validate and clean query plan
+            query_plan = self._validate_query_plan(query_plan)
+            logger.info(f"Cleaned query plan: {json.dumps(query_plan, indent=2)}")
+
             # Get filtered receipts from storage
             receipts = self.storage.get_filtered_receipts(query_plan, user_id)
             if not receipts:
@@ -157,6 +179,44 @@ Examples:
         except Exception as e:
             logger.error(f"Query execution error: {e}")
             return None
+        
+    def _validate_query_plan(self, query_plan: Dict) -> Dict:
+        """Clean and validate query plan"""
+        try:
+            # Clean up filter
+            clean_filter = {}
+            filter_params = query_plan.get("filter", {})
+            
+            # Only include non-null, non-empty values
+            for key, value in filter_params.items():
+                if value is not None:
+                    if isinstance(value, list) and len(value) > 0:
+                        clean_filter[key] = value
+                    elif isinstance(value, dict):
+                        # For price_range and date_range, check if they have valid values
+                        clean_dict = {k: v for k, v in value.items() if v is not None}
+                        if clean_dict:
+                            clean_filter[key] = clean_dict
+                    elif not isinstance(value, (list, dict)):
+                        clean_filter[key] = value
+            
+            # Ensure we have valid aggregation
+            aggregation = query_plan.get("aggregation")
+            if not aggregation:
+                aggregation = "count_receipts"
+            
+            # Ensure we have valid sort_by
+            sort_by = query_plan.get("sort_by", "upload_date_desc")
+            
+            return {
+                "filter": clean_filter,
+                "aggregation": aggregation,
+                "sort_by": sort_by
+            }
+        
+        except Exception as e:
+            logger.error(f"Query plan validation error: {e}")
+            return {"filter": {}, "aggregation": "count_receipts", "sort_by": "upload_date_desc"}
     
     def _sort_receipts(self, receipts: List[Dict], sort_by: str) -> List[Dict]:
         """Sort receipts based on criteria"""
@@ -187,9 +247,27 @@ Examples:
             keywords = filter_params.get("item_keywords", [])
             price_range = filter_params.get("price_range", {})
             
+            # Remove empty lists and None values
+            categories = [c for c in categories if c] if categories else []
+            keywords = [k for k in keywords if k] if keywords else []
+            
             # If no item-level filters, return all receipts
             if not categories and not keywords and not price_range:
                 return receipts
+            
+            # Check if price_range has valid values
+            has_price_filter = False
+            min_price = max_price = None
+            if price_range and isinstance(price_range, dict):
+                min_price = price_range.get("min")
+                max_price = price_range.get("max")
+                if min_price is not None and max_price is not None:
+                    try:
+                        min_price = float(min_price)
+                        max_price = float(max_price)
+                        has_price_filter = True
+                    except (ValueError, TypeError):
+                        pass
             
             filtered_receipts = []
             
@@ -213,11 +291,12 @@ Examples:
                             item_matches = False
                     
                     # Check price range
-                    if price_range and item_matches:
-                        item_price = float(item.get('price', 0))
-                        min_price = price_range.get('min', 0)
-                        max_price = price_range.get('max', float('inf'))
-                        if not (min_price <= item_price <= max_price):
+                    if has_price_filter and item_matches:
+                        try:
+                            item_price = float(item.get('price', 0))
+                            if not (min_price <= item_price <= max_price):
+                                item_matches = False
+                        except (ValueError, TypeError):
                             item_matches = False
                     
                     if item_matches:

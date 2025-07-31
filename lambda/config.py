@@ -12,9 +12,6 @@ S3_BUCKET_NAME = os.environ.get('S3_BUCKET_NAME')
 DYNAMODB_TABLE_NAME = os.environ.get('DYNAMODB_TABLE_NAME')
 BEDROCK_REGION = os.environ.get('BEDROCK_REGION')
 
-# Telegram API
-TELEGRAM_API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
-
 # Message limits
 MAX_MESSAGE_LENGTH = 4000
 MAX_ITEMS_DISPLAY = 15
