@@ -152,25 +152,21 @@ class ReceiptBotStack(Stack):
         )
     
     def _create_api_gateway(self, lambda_func: _lambda.Function, log_group: logs.LogGroup) -> apigwv2.HttpApi:
-        """Create HTTP API for Telegram webhook (modern, faster, cheaper)"""
-        
-        # Create Lambda integration
+        """Create HTTP API for Telegram webhook with custom access logs"""
+
         lambda_integration = integrations.HttpLambdaIntegration(
             "TelegramWebhookIntegration",
-            lambda_func,
+            handler=lambda_func,
             timeout=Duration.seconds(29)
         )
-        
-        # Create HTTP API with logging
+
+        # Create the HTTP API
         api = apigwv2.HttpApi(
             self, "TelegramWebhookHttpApi",
             api_name="Receipt Bot Webhook",
             description="Telegram webhook endpoint for receipt bot"
         )
 
-        # Access the CfnStage resource
-        cfn_stage = api.default_stage.node.default_child
-        
         # Add webhook route
         api.add_routes(
             path="/webhook",
@@ -178,40 +174,26 @@ class ReceiptBotStack(Stack):
             integration=lambda_integration
         )
 
-        # Create a role for API Gateway to write logs to CloudWatch
-        log_writer_role = iam.Role(
-            self, 
-            "ApiGatewayLogWriterRole",
-            assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com")
-        )
+        # Get the default stage L1 resource
+        default_stage = api.default_stage.node.default_child
 
-        # Grant write permissions to the log group
-        log_group.grant_write(log_writer_role)
-
-        # Configure access log settings
-        cfn_stage.access_log_settings = apigwv2.CfnStage.AccessLogSettingsProperty(
-            destination_arn=log_group.log_group_arn,
-            format=json.dumps({
+        # Override access log settings on the existing stage
+        default_stage.add_property_override("AccessLogSettings.DestinationArn", log_group.log_group_arn)
+        default_stage.add_property_override(
+            "AccessLogSettings.Format",
+            json.dumps({
                 "requestId": "$context.requestId",
-                "requestTime": "$context.requestTime",
-                "httpMethod": "$context.httpMethod",
-                "path": "$context.path",
                 "status": "$context.status",
-                "protocol": "$context.protocol",
-                "responseLength": "$context.responseLength"
+                "path": "$context.path",
+                "integrationErrorMessage": "$context.integration.error"
             })
         )
 
-        # Grant API Gateway permission to invoke Lambda
-        lambda_func.add_permission(
-            "AllowHttpApiInvoke",
-            principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
-            action="lambda:InvokeFunction",
-            source_arn=f"arn:aws:execute-api:{self.region}:{self.account}:{api.api_id}/*/*"
-        )
-        
-        return api
+        # Ensure the log group can be written to by API Gateway
+        log_group.grant_write(iam.ServicePrincipal("apigateway.amazonaws.com"))
 
+        return api
+    
     def _create_webhook_setup(self, bot_token: str, webhook_url: str, api_gateway: apigwv2.HttpApi, log_group: logs.LogGroup) -> None:
         """Create webhook setup custom resource"""
         

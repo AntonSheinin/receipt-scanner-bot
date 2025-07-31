@@ -240,25 +240,32 @@ class StorageService:
             return receipts
         
     def delete_last_receipt(self, user_id: str) -> Optional[Dict]:
-        """Delete the most recently created receipt for a user"""
+        """Delete the most recently UPLOADED receipt for a user"""
         try:
             if not self.receipts_table:
                 logger.error("DynamoDB table not configured")
                 return None
             
-            # Get the most recent receipt
+            # Get receipts sorted by created_at (upload time), not receipt date
             response = self.receipts_table.query(
                 KeyConditionExpression=Key('user_id').eq(user_id),
-                ScanIndexForward=False,  # Sort in descending order
-                Limit=1
+                ScanIndexForward=False,  # Sort in descending order by sort key (receipt_id)
+                Limit=50  # Get more items to sort properly by created_at
             )
             
             items = response.get('Items', [])
             if not items:
                 return None
             
-            last_receipt = convert_decimals_to_floats(items[0])
-            receipt_id = last_receipt['receipt_id']
+            # Sort by created_at (upload time) to get the most recently uploaded
+            sorted_items = sorted(
+                convert_decimals_to_floats(items), 
+                key=lambda x: x.get('created_at', '1900-01-01T00:00:00'), 
+                reverse=True
+            )
+            
+            last_uploaded = sorted_items[0]
+            receipt_id = last_uploaded['receipt_id']
             
             # Delete from DynamoDB
             self.receipts_table.delete_item(
@@ -269,12 +276,12 @@ class StorageService:
             )
             
             # Delete image from S3 if exists
-            image_url = last_receipt.get('image_url')
+            image_url = last_uploaded.get('image_url')
             if image_url and image_url.startswith('s3://'):
                 self._delete_s3_image(image_url)
             
-            logger.info(f"Deleted receipt: {receipt_id} for user: {user_id}")
-            return last_receipt
+            logger.info(f"Deleted most recently uploaded receipt: {receipt_id} for user: {user_id}")
+            return last_uploaded
             
         except Exception as e:
             logger.error(f"Delete last receipt error: {e}")

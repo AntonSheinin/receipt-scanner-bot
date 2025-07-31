@@ -91,33 +91,26 @@ Generate a JSON query plan with this structure:
         "item_keywords": ["keyword1", "keyword2"],
         "categories": ["food", "beverages", "household"],
         "price_range": {{"min": 0, "max": 100}},
-        "payment_methods": ["cash", "credit_card", "other"]
+        "payment_methods": ["cash", "credit_card", "other"],
+        "limit": 1
     }},
-    "aggregation": "sum_total|sum_by_category|min_price_by_store|max_price_by_store|count_receipts|list_stores|list_items"
+    "aggregation": "sum_total|sum_by_category|min_price_by_store|max_price_by_store|count_receipts|list_stores",
+    "sort_by": "upload_date_desc|upload_date_asc|receipt_date_desc|receipt_date_asc|total_desc|total_asc"
 }}
 
 Rules:
-- Only include filter fields that are relevant to the question
-- For date queries like "August", "last month", "this month", use appropriate date ranges
-- For "last month" use: {last_month}-01 to {last_month}-31
-- For "this month" use: {current_month}-01 to {current_date.strftime('%Y-%m-%d')}
-- For price comparison questions, use min_price_by_store or max_price_by_store
-- For spending questions WITHOUT category filter, use sum_total
-- For spending questions WITH category filter, use sum_by_category
-- For counting questions, use count_receipts
-- Item keywords should include both English and Hebrew terms when possible
-- Categories: food, beverages, household, electronics, clothing, pharmacy, health, other
+- For "latest/last uploaded" queries, use sort_by: "upload_date_desc"
+- For "most recent receipt by date" queries, use sort_by: "receipt_date_desc"
+- For "oldest uploaded" queries, use sort_by: "upload_date_asc"
+- For Hebrew queries like "החשבונית האחרונה שהעליתי" (last uploaded), use sort_by: "upload_date_desc"
+- For Hebrew queries like "הקנייה האחרונה" (last purchase by date), use sort_by: "receipt_date_desc"
 
 Examples:
-"How much did I spend on food in August?" → date_range: August 2025, categories: ["food"], aggregation: "sum_by_category"
-"כמה ביזבזתי על אוכל?" → categories: ["food"], aggregation: "sum_by_category"
-"How much did I spend last month?" → date_range: last month, aggregation: "sum_total"
-"Which store has cheapest milk?" → item_keywords: ["milk", "חלב"], aggregation: "min_price_by_store"
-"How many receipts from Rami Levy?" → store_names: ["Rami Levy"], aggregation: "count_receipts"
-
-IMPORTANT: When categories are specified in the filter, ALWAYS use "sum_by_category" aggregation, never "sum_total".
-
-Return ONLY the JSON object, no explanations, no markdown"""
+"Show me my last uploaded receipt" → limit: 1, sort_by: "upload_date_desc"
+"What is my most recent purchase?" → limit: 1, sort_by: "receipt_date_desc"
+"מה החשבונית האחרונה שהעליתי?" → limit: 1, sort_by: "upload_date_desc"
+"מה הקנייה האחרונה שלי?" → limit: 1, sort_by: "receipt_date_desc"
+"""
 
             return self.llm.generate_query_plan(prompt)
             
@@ -139,20 +132,53 @@ Return ONLY the JSON object, no explanations, no markdown"""
             filtered_receipts = self._filter_by_items(receipts, query_plan.get("filter", {}))
             logger.info(f"After filtering: {len(filtered_receipts)} receipts")
             
+            # Apply sorting
+            sort_by = query_plan.get("sort_by", "date_desc")
+            filtered_receipts = self._sort_receipts(filtered_receipts, sort_by)
+            
+            # Apply limit
+            filter_params = query_plan.get("filter", {})
+            limit = filter_params.get("limit")
+            if limit and isinstance(limit, int) and limit > 0:
+                filtered_receipts = filtered_receipts[:limit]
+                logger.info(f"After limit {limit}: {len(filtered_receipts)} receipts")
+            
             # Apply aggregation
             aggregation_type = query_plan.get("aggregation", "count_receipts")
-            results = self._aggregate_results(filtered_receipts, query_plan.get("filter", {}), aggregation_type)
+            results = self._aggregate_results(filtered_receipts, filter_params, aggregation_type)
             
             return {
                 "query": query_plan,
                 "results": results,
-                "raw_data": filtered_receipts[:3],
+                "raw_data": filtered_receipts[:3],  # Always show sample data for context
                 "total_receipts": len(filtered_receipts)
             }
             
         except Exception as e:
             logger.error(f"Query execution error: {e}")
             return None
+    
+    def _sort_receipts(self, receipts: List[Dict], sort_by: str) -> List[Dict]:
+        """Sort receipts based on criteria"""
+        try:
+            if sort_by == "upload_date_desc":
+                return sorted(receipts, key=lambda x: x.get('created_at', '1900-01-01T00:00:00'), reverse=True)
+            elif sort_by == "upload_date_asc":
+                return sorted(receipts, key=lambda x: x.get('created_at', '1900-01-01T00:00:00'))
+            elif sort_by == "receipt_date_desc":
+                return sorted(receipts, key=lambda x: x.get('date', '1900-01-01'), reverse=True)
+            elif sort_by == "receipt_date_asc":
+                return sorted(receipts, key=lambda x: x.get('date', '1900-01-01'))
+            elif sort_by == "total_desc":
+                return sorted(receipts, key=lambda x: float(x.get('total', 0)), reverse=True)
+            elif sort_by == "total_asc":
+                return sorted(receipts, key=lambda x: float(x.get('total', 0)))
+            else:
+                # Default to upload date desc for "last uploaded"
+                return sorted(receipts, key=lambda x: x.get('created_at', '1900-01-01T00:00:00'), reverse=True)
+        except Exception as e:
+            logger.error(f"Sorting error: {e}")
+            return receipts
     
     def _filter_by_items(self, receipts: List[Dict], filter_params: Dict) -> List[Dict]:
         """Filter receipts by item-level criteria"""

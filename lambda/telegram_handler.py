@@ -154,24 +154,27 @@ def create_response(status_code: int, body: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 def handle_delete_last_command(chat_id: int) -> Dict:
-    """Handle /delete-last command"""
+    """Handle /delete_last command - delete last UPLOADED receipt"""
     try:
         from services.storage_service import StorageService
         storage_service = StorageService()
         
         telegram_service.send_typing(chat_id)
         
+        # Make sure we delete by upload date (created_at), not receipt date
         deleted_receipt = storage_service.delete_last_receipt(str(chat_id))
         
         if deleted_receipt:
             store_name = deleted_receipt.get('store_name', 'Unknown Store')
-            date = deleted_receipt.get('date', 'Unknown Date')
+            receipt_date = deleted_receipt.get('date', 'Unknown Date')
+            upload_date = deleted_receipt.get('created_at', 'Unknown Upload Date')
             total = deleted_receipt.get('total', '0.00')
             
             message = (
-                "🗑️ *Last Receipt Deleted Successfully*\n\n"
+                "🗑️ *Last Uploaded Receipt Deleted*\n\n"
                 f"🏪 Store: {store_name}\n"
-                f"📅 Date: {date}\n"
+                f"📅 Receipt Date: {receipt_date}\n"
+                f"📤 Uploaded: {upload_date[:10]}\n"  # Show just date part
                 f"💰 Total: ${total}\n"
                 f"🆔 Receipt ID: `{deleted_receipt['receipt_id']}`"
             )
