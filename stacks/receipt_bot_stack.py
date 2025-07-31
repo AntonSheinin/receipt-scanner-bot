@@ -6,11 +6,13 @@ import os
 import json
 from typing import Any
 
+from aws_cdk.aws_lambda_python_alpha import PythonFunction
 from aws_cdk import (
     Stack,
     Duration,
     RemovalPolicy,
     CustomResource,
+    BundlingOptions,
     aws_lambda as _lambda,
     aws_apigatewayv2 as apigwv2,
     aws_apigatewayv2_integrations as integrations,
@@ -50,7 +52,7 @@ class ReceiptBotStack(Stack):
         
         # Setup webhook if bot token is valid
         if bot_token != "placeholder_token_for_bootstrap":
-            webhook_url = f"{api_gateway.api_endpoint}webhook"
+            webhook_url = f"{api_gateway.api_endpoint}/webhook"
             self._create_webhook_setup(bot_token, webhook_url, api_gateway, main_log_group)
         
         # Outputs
@@ -130,22 +132,12 @@ class ReceiptBotStack(Stack):
     
     def _create_telegram_lambda(self, role: iam.Role, bot_token: str, bucket: s3.Bucket, table: dynamodb.Table, log_group: logs.LogGroup) -> _lambda.Function:
         """Create main Telegram Lambda function"""
-        return _lambda.Function(
+        return PythonFunction(
             self, "TelegramHandler",
+            entry="lambda",  # directory containing handler.py and requirements.txt
             runtime=_lambda.Runtime.PYTHON_3_12,
-            handler="telegram_handler.lambda_handler",
-            code=_lambda.Code.from_asset(
-                "lambda",
-                # bundling=cdk.BundlingOptions(
-                #     image=_lambda.Runtime.PYTHON_3_12.bundling_image,
-                #     command=[
-                #         "bash", "-c",
-                #         "pip install -r requirements.txt -t /asset-output && "
-                #         "cp -r . /asset-output && "
-                #         "find /asset-output -name '__pycache__' -type d -exec rm -rf {} + || true"
-                #     ]
-                # )
-            ),
+            index="telegram_handler.py",  # your filename
+            handler="lambda_handler",     # your function inside the file
             role=role,
             timeout=Duration.minutes(5),
             environment={
@@ -187,8 +179,11 @@ class ReceiptBotStack(Stack):
         )
 
         # Create a role for API Gateway to write logs to CloudWatch
-        log_writer_role = iam.Role(self, "ApiGatewayLogWriterRole",
-                                assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com"))
+        log_writer_role = iam.Role(
+            self, 
+            "ApiGatewayLogWriterRole",
+            assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com")
+        )
 
         # Grant write permissions to the log group
         log_group.grant_write(log_writer_role)
@@ -243,22 +238,12 @@ class ReceiptBotStack(Stack):
     
     def _create_webhook_setter_lambda(self, log_group: logs.LogGroup) -> _lambda.Function:
         """Create Lambda function for webhook setup"""
-        return _lambda.Function(
+        return PythonFunction(
             self, "WebhookSetterHandler",
+            entry="lambda",  # Folder that contains webhook_setter_handler.py and requirements.txt
+            index="webhook_setter_handler.py",  # File with the Lambda handler
+            handler="lambda_handler",           # Function inside the file
             runtime=_lambda.Runtime.PYTHON_3_12,
-            handler="webhook_setter_handler.lambda_handler",
-            code=_lambda.Code.from_asset(
-                "lambda",
-                # bundling=cdk.BundlingOptions(
-                #     image=_lambda.Runtime.PYTHON_3_12.bundling_image,
-                #     command=[
-                #         "bash", "-c",
-                #         "pip install urllib3 -t /asset-output && "
-                #         "cp -r . /asset-output && "
-                #         "find /asset-output -name '__pycache__' -type d -exec rm -rf {} + || true"
-                #     ]
-                # )
-            ),
             timeout=Duration.minutes(2),
             log_group=log_group,
             logging_format=_lambda.LoggingFormat.TEXT
