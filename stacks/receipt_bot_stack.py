@@ -3,15 +3,17 @@ Receipt Bot Stack - AWS CDK Infrastructure
 """
 
 import os
+import json
 from typing import Any
-import aws_cdk as cdk
+
 from aws_cdk import (
     Stack,
     Duration,
     RemovalPolicy,
     CustomResource,
     aws_lambda as _lambda,
-    aws_apigateway as apigateway,
+    aws_apigatewayv2 as apigwv2,
+    aws_apigatewayv2_integrations as integrations,
     aws_iam as iam,
     aws_logs as logs,
     aws_dynamodb as dynamodb,
@@ -20,10 +22,7 @@ from aws_cdk import (
     custom_resources as cr
 )
 from constructs import Construct
-from dotenv import load_dotenv
 
-
-load_dotenv()
 
 class ReceiptBotStack(Stack):
     
@@ -31,11 +30,11 @@ class ReceiptBotStack(Stack):
         super().__init__(scope, construct_id, **kwargs)
         
         # Get bot token
-        bot_token = os.getenv('TELEGRAM_BOT_TOKEN') or self.node.try_get_context("telegram_bot_token")
+        bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
         
         if not bot_token:
             bot_token = "placeholder_token_for_bootstrap"
-            print("⚠️  No bot token found. Set TELEGRAM_BOT_TOKEN in .env file")
+            print("⚠️ No bot token found. Set TELEGRAM_BOT_TOKEN in .env file")
         else:
             print("✅ Bot token loaded successfully")
         
@@ -51,7 +50,7 @@ class ReceiptBotStack(Stack):
         
         # Setup webhook if bot token is valid
         if bot_token != "placeholder_token_for_bootstrap":
-            webhook_url = f"{api_gateway.url}webhook"
+            webhook_url = f"{api_gateway.api_endpoint}webhook"
             self._create_webhook_setup(bot_token, webhook_url, api_gateway, main_log_group)
         
         # Outputs
@@ -98,6 +97,12 @@ class ReceiptBotStack(Stack):
             sort_key=dynamodb.Attribute(name="store_name", type=dynamodb.AttributeType.STRING)
         )
         
+        table.add_global_secondary_index(
+            index_name="PaymentMethodIndex",
+            partition_key=dynamodb.Attribute(name="user_id", type=dynamodb.AttributeType.STRING),
+            sort_key=dynamodb.Attribute(name="payment_method", type=dynamodb.AttributeType.STRING)
+        )
+
         return table
     
     def _create_lambda_role(self, bucket: s3.Bucket, table: dynamodb.Table) -> iam.Role:
@@ -120,16 +125,7 @@ class ReceiptBotStack(Stack):
         
         bucket.grant_read_write(role)
         table.grant_read_write_data(role)
-        
-        # Create API Gateway CloudWatch role
-        iam.Role(
-            self, "ApiGatewayCloudWatchRole",
-            assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com"),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AmazonAPIGatewayPushToCloudWatchLogs")
-            ]
-        )
-        
+
         return role
     
     def _create_telegram_lambda(self, role: iam.Role, bot_token: str, bucket: s3.Bucket, table: dynamodb.Table, log_group: logs.LogGroup) -> _lambda.Function:
@@ -140,15 +136,15 @@ class ReceiptBotStack(Stack):
             handler="telegram_handler.lambda_handler",
             code=_lambda.Code.from_asset(
                 "lambda",
-                bundling=cdk.BundlingOptions(
-                    image=_lambda.Runtime.PYTHON_3_12.bundling_image,
-                    command=[
-                        "bash", "-c",
-                        "pip install -r requirements.txt -t /asset-output && "
-                        "cp -r . /asset-output && "
-                        "find /asset-output -name '__pycache__' -type d -exec rm -rf {} + || true"
-                    ]
-                )
+                # bundling=cdk.BundlingOptions(
+                #     image=_lambda.Runtime.PYTHON_3_12.bundling_image,
+                #     command=[
+                #         "bash", "-c",
+                #         "pip install -r requirements.txt -t /asset-output && "
+                #         "cp -r . /asset-output && "
+                #         "find /asset-output -name '__pycache__' -type d -exec rm -rf {} + || true"
+                #     ]
+                # )
             ),
             role=role,
             timeout=Duration.minutes(5),
@@ -163,35 +159,65 @@ class ReceiptBotStack(Stack):
             logging_format=_lambda.LoggingFormat.TEXT
         )
     
-    def _create_api_gateway(self, lambda_func: _lambda.Function, log_group: logs.LogGroup) -> apigateway.RestApi:
-        """Create API Gateway for Telegram webhook"""
-        api = apigateway.RestApi(
-            self, "TelegramWebhookApi",
-            rest_api_name="Receipt Bot Webhook",
-            deploy_options=apigateway.StageOptions(
-                logging_level=apigateway.MethodLoggingLevel.INFO,
-                access_log_destination=apigateway.LogGroupLogDestination(log_group)
-            )
+    def _create_api_gateway(self, lambda_func: _lambda.Function, log_group: logs.LogGroup) -> apigwv2.HttpApi:
+        """Create HTTP API for Telegram webhook (modern, faster, cheaper)"""
+        
+        # Create Lambda integration
+        lambda_integration = integrations.HttpLambdaIntegration(
+            "TelegramWebhookIntegration",
+            lambda_func,
+            timeout=Duration.seconds(29)
         )
         
-        # Create webhook resource and method
-        webhook_resource = api.root.add_resource("webhook")
-        webhook_resource.add_method(
-            "POST",
-            apigateway.LambdaIntegration(lambda_func, timeout=Duration.seconds(29))
+        # Create HTTP API with logging
+        api = apigwv2.HttpApi(
+            self, "TelegramWebhookHttpApi",
+            api_name="Receipt Bot Webhook",
+            description="Telegram webhook endpoint for receipt bot"
         )
+
+        # Access the CfnStage resource
+        cfn_stage = api.default_stage.node.default_child
         
+        # Add webhook route
+        api.add_routes(
+            path="/webhook",
+            methods=[apigwv2.HttpMethod.POST],
+            integration=lambda_integration
+        )
+
+        # Create a role for API Gateway to write logs to CloudWatch
+        log_writer_role = iam.Role(self, "ApiGatewayLogWriterRole",
+                                assumed_by=iam.ServicePrincipal("apigateway.amazonaws.com"))
+
+        # Grant write permissions to the log group
+        log_group.grant_write(log_writer_role)
+
+        # Configure access log settings
+        cfn_stage.access_log_settings = apigwv2.CfnStage.AccessLogSettingsProperty(
+            destination_arn=log_group.log_group_arn,
+            format=json.dumps({
+                "requestId": "$context.requestId",
+                "requestTime": "$context.requestTime",
+                "httpMethod": "$context.httpMethod",
+                "path": "$context.path",
+                "status": "$context.status",
+                "protocol": "$context.protocol",
+                "responseLength": "$context.responseLength"
+            })
+        )
+
         # Grant API Gateway permission to invoke Lambda
         lambda_func.add_permission(
-            "AllowAPIGatewayInvoke",
+            "AllowHttpApiInvoke",
             principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
             action="lambda:InvokeFunction",
-            source_arn=f"{api.arn_for_execute_api()}/*/*"
+            source_arn=f"arn:aws:execute-api:{self.region}:{self.account}:{api.api_id}/*/*"
         )
         
         return api
-    
-    def _create_webhook_setup(self, bot_token: str, webhook_url: str, api_gateway: apigateway.RestApi, log_group: logs.LogGroup) -> None:
+
+    def _create_webhook_setup(self, bot_token: str, webhook_url: str, api_gateway: apigwv2.HttpApi, log_group: logs.LogGroup) -> None:
         """Create webhook setup custom resource"""
         
         # Create webhook setter Lambda
@@ -223,27 +249,27 @@ class ReceiptBotStack(Stack):
             handler="webhook_setter_handler.lambda_handler",
             code=_lambda.Code.from_asset(
                 "lambda",
-                bundling=cdk.BundlingOptions(
-                    image=_lambda.Runtime.PYTHON_3_12.bundling_image,
-                    command=[
-                        "bash", "-c",
-                        "pip install urllib3 -t /asset-output && "
-                        "cp -r . /asset-output && "
-                        "find /asset-output -name '__pycache__' -type d -exec rm -rf {} + || true"
-                    ]
-                )
+                # bundling=cdk.BundlingOptions(
+                #     image=_lambda.Runtime.PYTHON_3_12.bundling_image,
+                #     command=[
+                #         "bash", "-c",
+                #         "pip install urllib3 -t /asset-output && "
+                #         "cp -r . /asset-output && "
+                #         "find /asset-output -name '__pycache__' -type d -exec rm -rf {} + || true"
+                #     ]
+                # )
             ),
             timeout=Duration.minutes(2),
             log_group=log_group,
             logging_format=_lambda.LoggingFormat.TEXT
         )
         
-    def _create_outputs(self, api_gateway: apigateway.RestApi, bucket: s3.Bucket, table: dynamodb.Table, bot_token: str, log_group: logs.LogGroup) -> None:
+    def _create_outputs(self, api_gateway: apigwv2.HttpApi, bucket: s3.Bucket, table: dynamodb.Table, bot_token: str, log_group: logs.LogGroup) -> None:
         """Create stack outputs"""
         
         CfnOutput(
             self, "TelegramWebhookUrl",
-            value=f"{api_gateway.url}webhook"
+            value=f"{api_gateway.api_endpoint}/webhook" 
         )
         
         CfnOutput(
@@ -274,3 +300,5 @@ class ReceiptBotStack(Stack):
                 value="Set TELEGRAM_BOT_TOKEN and redeploy",
                 description="Webhook setup status"
             )
+        
+        

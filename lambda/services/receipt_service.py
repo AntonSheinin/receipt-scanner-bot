@@ -76,6 +76,16 @@ class ReceiptService:
             
             if receipt_data.get('receipt_number'):
                 result += f"🧾 *Receipt #:* {receipt_data['receipt_number']}\n"
+
+            if receipt_data.get('payment_method'):
+                payment_icons = {
+                    'cash': '💵',
+                    'credit_card': '💳', 
+                    'other': '💰'
+                }
+                method = receipt_data['payment_method']
+                icon = payment_icons.get(method, '💰')
+                result += f"{icon} *Payment:* {method.replace('_', ' ').title()}\n"
             
             result += "\n"
             

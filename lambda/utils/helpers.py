@@ -6,7 +6,31 @@ import json
 from decimal import Decimal
 from typing import Any, Optional
 
-def convert_decimals(obj: Any) -> Any:
+def convert_floats_to_decimals(obj: Any) -> Any:
+    """
+        Recursively convert float and numeric values to Decimal for DynamoDB storage
+    """
+    if obj is None:
+        return None
+    elif isinstance(obj, (int, float)):
+        return Decimal(str(obj))
+    elif isinstance(obj, str):
+        # Try to convert numeric strings to Decimal
+        try:
+            if '.' in obj or obj.isdigit():
+                float(obj)  # Validate it's a valid number
+                return Decimal(obj)
+        except ValueError:
+            pass
+        return obj
+    elif isinstance(obj, dict):
+        return {k: convert_floats_to_decimals(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_floats_to_decimals(item) for item in obj]
+    else:
+        return obj
+
+def convert_decimals_to_floats(obj: Any) -> Any:
     """
         Recursively convert Decimal objects to float
     """
@@ -15,10 +39,10 @@ def convert_decimals(obj: Any) -> Any:
         return float(obj)
     
     if isinstance(obj, dict):
-        return {k: convert_decimals(v) for k, v in obj.items()}
+        return {k: convert_decimals_to_floats(v) for k, v in obj.items()}
     
     if isinstance(obj, list):
-        return [convert_decimals(v) for v in obj]
+        return [convert_decimals_to_floats(v) for v in obj]
     
     return obj
 

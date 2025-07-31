@@ -90,7 +90,8 @@ Generate a JSON query plan with this structure:
         "store_names": ["store1", "store2"],
         "item_keywords": ["keyword1", "keyword2"],
         "categories": ["food", "beverages", "household"],
-        "price_range": {{"min": 0, "max": 100}}
+        "price_range": {{"min": 0, "max": 100}},
+        "payment_methods": ["cash", "credit_card", "other"]
     }},
     "aggregation": "sum_total|sum_by_category|min_price_by_store|max_price_by_store|count_receipts|list_stores|list_items"
 }}
@@ -284,6 +285,29 @@ Return ONLY the JSON object, no explanations, no markdown"""
             elif aggregation_type == "list_stores":
                 stores = list(set(receipt.get('store_name', 'Unknown') for receipt in receipts))
                 return {"stores": stores, "store_count": len(stores), "receipt_count": len(receipts), "type": "store_list"}
+            
+            elif aggregation_type == "sum_by_payment":
+                payment_sums = {}
+                payment_methods = filter_params.get("payment_methods", [])
+                
+                for receipt in receipts:
+                    payment_method = receipt.get('payment_method', 'other')
+                    
+                    # If payment methods filter specified, only include matching receipts
+                    if payment_methods and payment_method not in payment_methods:
+                        continue
+                    
+                    total = float(receipt.get('total', 0))
+                    payment_sums[payment_method] = payment_sums.get(payment_method, 0) + total
+                
+                payment_sums = {k: round(v, 2) for k, v in payment_sums.items()}
+                
+                return {
+                    "payment_totals": payment_sums,
+                    "total_spent": round(sum(payment_sums.values()), 2),
+                    "receipt_count": len(receipts),
+                    "type": "payment_breakdown"
+                }
             
             else:
                 return {"receipt_count": len(receipts), "type": "default"}

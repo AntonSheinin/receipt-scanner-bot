@@ -74,6 +74,7 @@ RECEIPT_ANALYSIS_PROMPT = """Analyze this receipt image carefully and extract st
 - First examine the overall layout and identify languages used
 - Locate and read all text sections methodically 
 - Identify item names, prices, quantities, and categories
+- Look for payment method indicators (CASH, CARD, CREDIT, VISA, MASTERCARD, מזומן, אשראי etc.)
 - Validate that extracted prices are reasonable and properly formatted
 - Cross-reference individual items with the total amount
 - Preserve Hebrew/non-Latin text properly without escaping to Unicode
@@ -84,6 +85,7 @@ Extract the following information in valid JSON format ONLY (no additional text 
     "store_name": "name of the store/business",
     "date": "date in YYYY-MM-DD format",
     "receipt_number": "receipt/transaction number if available",
+    "payment_method": "cash|credit_card|other",
     "items": [
         {
             "name": "item name (preserve Hebrew characters properly)",
@@ -94,6 +96,13 @@ Extract the following information in valid JSON format ONLY (no additional text 
     ],
     "total": "total amount as decimal number"
 }
+
+Payment method detection rules:
+- Look for text indicators like: CASH, CARD, CREDIT, VISA, MASTERCARD, מזומן, אשראי etc.
+- "cash" for cash payments or text containing "CASH", "מזומן"
+- "credit_card" for card payments or text containing "CARD", "CREDIT", "VISA", "MASTERCARD", "כרטיס", "אשראי"
+- "other" for any other payment method
+- Use null if payment method cannot be determined
 
 Important:
 - Return ONLY the JSON object, no markdown formatting or explanations

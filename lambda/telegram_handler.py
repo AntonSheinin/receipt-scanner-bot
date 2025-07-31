@@ -39,27 +39,64 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if not message:
             logger.info("No message in update, ignoring")
             return create_response(200, {"status": "no message"})
-
-        # Return success to Telegram immediately
-        response = create_response(200, {"status": "processing"})
         
         # Process message after responding to Telegram
         chat_id = message['chat']['id']
         try:
             if 'photo' in message:
-                receipt_service.process_receipt(message, chat_id)
+                process_receipt_async(message, chat_id)
             elif 'text' in message:
                 process_text_message(message, chat_id)
         except Exception as e:
             logger.error(f"Processing error: {e}", exc_info=True)
-            telegram_service.send_message(chat_id, "❌ An error occurred while processing your request.")
+            try:
+                telegram_service.send_message(chat_id, "❌ An error occurred while processing your request.")
+            except:
+                pass
         
-        return response
+        return create_response(200, {"status": "processing"})
 
     except Exception as e:
         logger.error(f"Handler error: {e}", exc_info=True)
         return create_response(200, {"status": "error"})  # Always return 200 to prevent retries
+    
+def process_receipt_async(message: Dict, chat_id: int) -> None:
+    """Process receipt asynchronously after responding to Telegram"""
+    try:
+        # Add duplicate detection
+        if is_duplicate_request(message):
+            logger.info(f"Duplicate receipt request detected, skipping processing")
+            return
+            
+        receipt_service.process_receipt(message, chat_id)
+    except Exception as e:
+        logger.error(f"Async receipt processing error: {e}", exc_info=True)
+        try:
+            telegram_service.send_message(chat_id, "❌ Failed to process receipt. Please try again.")
+        except:
+            pass
 
+def is_duplicate_request(message: Dict) -> bool:
+    """Simple duplicate detection based on message timestamp and photo"""
+    try:
+        message_id = message.get('message_id')
+        date = message.get('date')
+        
+        # Create a simple key for this message
+        message_key = f"{message_id}_{date}"
+        
+        # Use a simple in-memory cache (for this Lambda execution)
+        if not hasattr(is_duplicate_request, '_processed_messages'):
+            is_duplicate_request._processed_messages = set()
+        
+        if message_key in is_duplicate_request._processed_messages:
+            return True
+        
+        is_duplicate_request._processed_messages.add(message_key)
+        return False
+        
+    except Exception:
+        return False  # If we can't determine, assume it's not a duplicate
 
 def process_text_message(message: Dict, chat_id: int) -> Dict:
     """Route text messages to appropriate handler"""

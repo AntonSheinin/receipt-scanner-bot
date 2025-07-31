@@ -7,7 +7,7 @@ from typing import Optional, List, Dict
 from boto3.dynamodb.conditions import Key, Attr
 
 from config import get_s3_client, get_receipts_table, S3_BUCKET_NAME, setup_logging
-from utils.helpers import convert_decimals
+from utils.helpers import convert_decimals_to_floats, convert_floats_to_decimals
 
 
 setup_logging()
@@ -50,33 +50,56 @@ class StorageService:
             return None
     
     def store_receipt_data(self, receipt_id: str, user_id: str, receipt_data: Dict, image_url: str) -> bool:
-        """Store receipt data in DynamoDB"""
+        """Store receipt data in DynamoDB with duplicate prevention"""
         try:
             if not self.receipts_table:
                 logger.error("DynamoDB table not configured")
                 return False
             
+            # Check if receipt already exists
+            try:
+                existing = self.receipts_table.get_item(
+                    Key={'user_id': user_id, 'receipt_id': receipt_id}
+                )
+                if 'Item' in existing:
+                    logger.info(f"Receipt {receipt_id} already exists, skipping storage")
+                    return True  # Return success since it's already stored
+            except Exception as e:
+                logger.warning(f"Error checking for existing receipt: {e}")
+            
+            # Convert all numeric values to Decimal for DynamoDB
+            processed_data = convert_floats_to_decimals(receipt_data)
+            
             item = {
-                'user_id': user_id,  # Partition key
-                'receipt_id': receipt_id,  # Sort key
+                'user_id': user_id,
+                'receipt_id': receipt_id,
                 'created_at': datetime.now(timezone.utc).isoformat(),
                 'image_url': image_url,
-                'store_name': receipt_data.get('store_name', ''),
-                'date': receipt_data.get('date', ''),
-                'receipt_number': receipt_data.get('receipt_number'),
-                'total': receipt_data.get('total'),
-                'items': receipt_data.get('items', []),
-                'raw_data': receipt_data
+                'store_name': processed_data.get('store_name', ''),
+                'date': processed_data.get('date', ''),
+                'receipt_number': processed_data.get('receipt_number'),
+                'payment_method': processed_data.get('payment_method'),
+                'total': processed_data.get('total'),
+                'items': processed_data.get('items', []),
+                'raw_data': processed_data
             }
             
             # Remove None values
             item = {k: v for k, v in item.items() if v is not None}
-            self.receipts_table.put_item(Item=item)
+            
+            # Use conditional put to prevent overwriting
+            self.receipts_table.put_item(
+                Item=item,
+                ConditionExpression='attribute_not_exists(receipt_id)'
+            )
             
             logger.info(f"Receipt stored: {receipt_id}")
             return True
             
         except Exception as e:
+            if 'ConditionalCheckFailedException' in str(e):
+                logger.info(f"Receipt {receipt_id} already exists (conditional check failed)")
+                return True  # Already exists, that's fine
             logger.error(f"DynamoDB storage error: {e}")
             return False
     
@@ -91,7 +114,9 @@ class StorageService:
             receipts = []
             
             # Check if we can use an index for efficient querying
-            if "date_range" in filter_params:
+            if "payment_methods" in filter_params and filter_params["payment_methods"]:
+                receipts = self._query_by_payment_methods(user_id, filter_params["payment_methods"])
+            elif "date_range" in filter_params:
                 receipts = self._query_by_date_range(user_id, filter_params["date_range"])
             elif "store_names" in filter_params and filter_params["store_names"]:
                 receipts = self._query_by_store_names(user_id, filter_params["store_names"])
@@ -120,7 +145,7 @@ class StorageService:
                 KeyConditionExpression=Key('user_id').eq(user_id) & Key('date').between(start_date, end_date)
             )
             
-            return convert_decimals(response.get('Items', []))
+            return convert_decimals_to_floats(response.get('Items', []))
             
         except Exception as e:
             logger.error(f"Date range query error: {e}")
@@ -147,10 +172,36 @@ class StorageService:
                     seen_ids.add(receipt['receipt_id'])
                     unique_receipts.append(receipt)
             
-            return convert_decimals(unique_receipts)
+            return convert_decimals_to_floats(unique_receipts)
             
         except Exception as e:
             logger.error(f"Store name query error: {e}")
+            return self._scan_user_receipts(user_id)  # Fallback
+        
+    def _query_by_payment_methods(self, user_id: str, payment_methods: List[str]) -> List[Dict]:
+        """Query receipts by payment methods using PaymentMethodIndex"""
+        try:
+            all_receipts = []
+            
+            for payment_method in payment_methods:
+                response = self.receipts_table.query(
+                    IndexName="PaymentMethodIndex",
+                    KeyConditionExpression=Key('user_id').eq(user_id) & Key('payment_method').eq(payment_method)
+                )
+                all_receipts.extend(response.get('Items', []))
+            
+            # Remove duplicates based on receipt_id
+            seen_ids = set()
+            unique_receipts = []
+            for receipt in all_receipts:
+                if receipt['receipt_id'] not in seen_ids:
+                    seen_ids.add(receipt['receipt_id'])
+                    unique_receipts.append(receipt)
+            
+            return convert_decimals_to_floats(unique_receipts)
+            
+        except Exception as e:
+            logger.error(f"Payment method query error: {e}")
             return self._scan_user_receipts(user_id)  # Fallback
     
     def _scan_user_receipts(self, user_id: str) -> List[Dict]:
@@ -160,7 +211,7 @@ class StorageService:
                 KeyConditionExpression=Key('user_id').eq(user_id)
             )
             
-            return convert_decimals(response.get('Items', []))
+            return convert_decimals_to_floats(response.get('Items', []))
             
         except Exception as e:
             logger.error(f"User receipts scan error: {e}")
@@ -206,7 +257,7 @@ class StorageService:
             if not items:
                 return None
             
-            last_receipt = convert_decimals(items[0])
+            last_receipt = convert_decimals_to_floats(items[0])
             receipt_id = last_receipt['receipt_id']
             
             # Delete from DynamoDB
