@@ -6,8 +6,52 @@ import json
 class PromptManager:
     @staticmethod
     def get_receipt_analysis_prompt() -> str:
-        # Move RECEIPT_ANALYSIS_PROMPT from config here
-        return """Analyze this receipt image carefully and extract structured data..."""
+        """
+            Generate the prompt for receipt analysis using LLM.
+        """
+
+        return """Analyze this receipt image carefully and extract structured data. Think through the analysis step-by-step internally:
+
+- First examine the overall layout and identify languages used
+- Locate and read all text sections methodically 
+- Identify item names, prices, quantities, and categories
+- Look for payment method indicators (CASH, CARD, CREDIT, VISA, MASTERCARD, מזומן, אשראי etc.)
+- Validate that extracted prices are reasonable and properly formatted
+- Cross-reference individual items with the total amount
+- Preserve Hebrew/non-Latin text properly without escaping to Unicode
+
+Extract the following information in valid JSON format ONLY (no additional text or explanations):
+
+{
+    "store_name": "name of the store/business",
+    "date": "date in YYYY-MM-DD format",
+    "receipt_number": "receipt/transaction number if available",
+    "payment_method": "cash|credit_card|other",
+    "items": [
+        {
+            "name": "item name (preserve Hebrew characters properly)",
+            "price": "item price as decimal number",
+            "quantity": "quantity as integer", 
+            "category": "food/beverages/household/electronics/clothing/pharmacy/other (if identifiable)"
+        }
+    ],
+    "total": "total amount as decimal number"
+}
+
+Payment method detection rules:
+- Look for text indicators like: CASH, CARD, CREDIT, VISA, MASTERCARD, מזומן, אשראי etc.
+- "cash" for cash payments or text containing "CASH", "מזומן"
+- "credit_card" for card payments or text containing "CARD", "CREDIT", "VISA", "MASTERCARD", "כרטיס", "אשראי"
+- "other" for any other payment method
+- Use null if payment method cannot be determined
+
+Important:
+- Return ONLY the JSON object, no markdown formatting or explanations
+- If information is not clearly visible, use null
+- Ensure all prices are valid decimal numbers
+- Preserve Hebrew and special characters correctly
+- Categorize items accurately based on context and name
+- Validate that individual item prices logically add up to the total"""
     
     @staticmethod
     def get_query_plan_prompt(question: str) -> str:

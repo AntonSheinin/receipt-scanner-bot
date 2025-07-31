@@ -15,24 +15,18 @@ class LLMService:
         prompt = self.prompt_manager.get_receipt_analysis_prompt()
         response = self.provider.analyze_image(image_data, prompt)
         
-        if response:
-            return self.parser.parse_json_response(response.content)
-        return None
+        return self.parser.parse_json_response(response.content) if response else None
     
     def generate_query_plan(self, question: str) -> Optional[Dict]:
         """Generate query plan from natural language"""
         prompt = self.prompt_manager.get_query_plan_prompt(question)
         response = self.provider.generate_text(prompt)
         
-        if response:
-            return self.parser.parse_json_response(response.content)
-        return None
+        return self.parser.parse_json_response(response.content) if response else None 
     
     def generate_response(self, question: str, results: Dict) -> Optional[str]:
         """Generate human-readable response"""
         prompt = self.prompt_manager.get_response_generation_prompt(question, results)
         response = self.provider.generate_text(prompt)
         
-        if response:
-            return response.content
-        return None
+        return response.content if response else None
