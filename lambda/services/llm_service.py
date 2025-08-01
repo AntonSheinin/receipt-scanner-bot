@@ -1,4 +1,3 @@
-# services/llm_service.py
 from typing import Dict, Optional
 from utils.llm.factory import LLMFactory
 from utils.llm.prompts import PromptManager
@@ -30,3 +29,39 @@ class LLMService:
         response = self.provider.generate_text(prompt)
         
         return response.content if response else None
+
+    def structure_ocr_text(self, ocr_text: str) -> Optional[Dict]:
+        """Structure OCR-extracted text using LLM"""
+        prompt = f"""You are provided with OCR-extracted text from a receipt. Structure this text into JSON format.
+
+OCR Text:
+{ocr_text}
+
+Extract the following information in valid JSON format ONLY:
+
+{{
+    "store_name": "name of the store/business",
+    "date": "date in YYYY-MM-DD format", 
+    "receipt_number": "receipt/transaction number if available",
+    "payment_method": "cash|credit_card|other",
+    "items": [
+        {{
+            "name": "item name",
+            "price": "item price as decimal number",
+            "quantity": "quantity as integer",
+            "category": "food/beverages/household/electronics/clothing/pharmacy/other"
+        }}
+    ],
+    "total": "total amount as decimal number"
+}}
+
+Rules:
+- Return ONLY the JSON object, no markdown formatting
+- Use null for missing information
+- Preserve Hebrew/non-Latin characters properly
+- Ensure prices are valid decimal numbers
+- Detect payment method from text indicators like CASH, CARD, CREDIT, מזומן, אשראי
+- Categorize items based on their names and context"""
+
+        response = self.provider.generate_text(prompt)
+        return self.parser.parse_json_response(response.content) if response else None

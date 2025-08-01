@@ -14,6 +14,11 @@ BEDROCK_REGION = os.environ.get('BEDROCK_REGION')
 
 LLM_PROVIDER = os.environ.get('LLM_PROVIDER', 'bedrock')
 
+# OCR Configuration
+OCR_PROVIDER = os.environ.get('OCR_PROVIDER', 'textract')
+PROCESSING_MODE = os.environ.get('PROCESSING_MODE', 'auto')
+TEXTRACT_REGION = os.environ.get('TEXTRACT_REGION', BEDROCK_REGION)
+
 # Message limits
 MAX_MESSAGE_LENGTH = 4000
 MAX_ITEMS_DISPLAY = 15

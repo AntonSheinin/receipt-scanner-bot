@@ -7,7 +7,7 @@ from typing import Dict
 
 from .telegram_service import TelegramService
 from .storage_service import StorageService
-from .llm_service import LLMService
+from .document_processor_service import DocumentProcessorService, ProcessingMode
 from utils.helpers import create_response
 from config import MAX_ITEMS_DISPLAY, MAX_ITEM_NAME_LENGTH, setup_logging
 
@@ -21,7 +21,7 @@ class ReceiptService:
     def __init__(self):
         self.telegram = TelegramService()
         self.storage = StorageService()
-        self.llm = LLMService()
+        self.processor = DocumentProcessorService()
     
     def process_receipt(self, message: Dict, chat_id: int) -> Dict:
         """Process receipt photo end-to-end"""
@@ -42,9 +42,9 @@ class ReceiptService:
             if not image_url:
                 return self.telegram.send_error(chat_id, "Failed to store image. Please try again.")
             
-            # Analyze receipt
+            # Analyze receipt using hybrid processor
             self.telegram.send_message(chat_id, "🔍 Analyzing receipt... Please wait.")
-            receipt_data = self.llm.analyze_receipt(photo_data)
+            receipt_data = self.processor.process_receipt(photo_data, ProcessingMode.AUTO)
             if not receipt_data:
                 return self.telegram.send_error(chat_id, "Could not process receipt. Please ensure the image is clear and contains a valid receipt.")
             

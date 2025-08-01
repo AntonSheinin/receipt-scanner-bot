@@ -124,7 +124,17 @@ class ReceiptBotStack(Stack):
                 resources=["*"]
             )
         )
-        
+
+        role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "textract:DetectDocumentText",
+                    "textract:AnalyzeExpense"
+                ],
+                resources=["*"]
+            )
+        )
+            
         bucket.grant_read_write(role)
         table.grant_read_write_data(role)
 
@@ -145,7 +155,10 @@ class ReceiptBotStack(Stack):
                 "S3_BUCKET_NAME": bucket.bucket_name,
                 "DYNAMODB_TABLE_NAME": table.table_name,
                 "BEDROCK_REGION": os.getenv('BEDROCK_REGION'),
-                "BEDROCK_MODEL_ID": os.getenv('BEDROCK_MODEL_ID')
+                "BEDROCK_MODEL_ID": os.getenv('BEDROCK_MODEL_ID'),
+                "OCR_PROVIDER": os.getenv('OCR_PROVIDER'),
+                "PROCESSING_MODE": os.getenv('PROCESSING_MODE'),
+                "TEXTRACT_REGION": os.getenv('TEXTRACT_REGION', os.getenv('BEDROCK_REGION'))
             },
             log_group=log_group,
             logging_format=_lambda.LoggingFormat.TEXT
