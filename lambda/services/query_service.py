@@ -6,7 +6,7 @@ import logging
 from typing import Dict, Optional, List, Any
 from datetime import datetime, timedelta, timezone
 
-from config import setup_logging
+from config import LLM_PROVIDER, setup_logging
 
 from .telegram_service import TelegramService
 from .storage_service import StorageService
@@ -24,7 +24,7 @@ class QueryService:
     def __init__(self):
         self.telegram = TelegramService()
         self.storage = StorageService()
-        self.llm = LLMService()
+        self.llm = LLMService(LLM_PROVIDER)
         self.aggregator = ResultAggregatorService()
     
     def process_query(self, question: str, user_id: str) -> Dict:

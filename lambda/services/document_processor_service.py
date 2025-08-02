@@ -18,7 +18,7 @@ class DocumentProcessorService:
     
     def __init__(self):
         self.ocr = OCRFactory.create_provider(OCR_PROVIDER)
-        self.llm = LLMService(provider_name=LLM_PROVIDER)
+        self.llm = LLMService(LLM_PROVIDER)
         self.processing_mode = PROCESSING_MODE
     
     def process_receipt(self, image_data: bytes) -> Dict:
