@@ -157,8 +157,10 @@ class ReceiptBotStack(Stack):
                 "BEDROCK_REGION": os.getenv('BEDROCK_REGION'),
                 "BEDROCK_MODEL_ID": os.getenv('BEDROCK_MODEL_ID'),
                 "OCR_PROVIDER": os.getenv('OCR_PROVIDER'),
+                "LLM_PROVIDER": os.getenv('LLM_PROVIDER'),
                 "PROCESSING_MODE": os.getenv('PROCESSING_MODE'),
-                "TEXTRACT_REGION": os.getenv('TEXTRACT_REGION', os.getenv('BEDROCK_REGION'))
+                "TEXTRACT_REGION": os.getenv('TEXTRACT_REGION', os.getenv('BEDROCK_REGION')),
+                "GOOGLE_CREDENTIALS_JSON": os.getenv('GOOGLE_CREDENTIALS_JSON')
             },
             log_group=log_group,
             logging_format=_lambda.LoggingFormat.TEXT

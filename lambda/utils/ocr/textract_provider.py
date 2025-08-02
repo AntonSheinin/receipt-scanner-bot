@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 class TextractProvider(OCRProvider):
     """AWS Textract OCR provider"""
     
-    def __init__(self, region_name: str = "us-east-1"):
+    def __init__(self, region_name: str):
         self.client = boto3.client('textract', region_name=region_name)
     
     def extract_text(self, image_data: bytes) -> OCRResponse:
@@ -55,6 +55,8 @@ class TextractProvider(OCRProvider):
                 Document={'Bytes': image_data}
             )
             
+            logger.info(f"Textract response: {response}")
+
             expense_docs = response.get('ExpenseDocuments', [])
             if not expense_docs:
                 return self.extract_text(image_data)  # Fallback
@@ -70,6 +72,10 @@ class TextractProvider(OCRProvider):
             # Get raw text for payment method detection
             raw_text = self._extract_raw_text_from_blocks(expense_doc)
             
+            logger.info(f"Extracted {len(items)} items from receipt")
+            logger.info(f"Extracted items: {items}")
+            logger.info(f"Extracted raw text: {raw_text}")
+
             return OCRResponse(
                 raw_text=raw_text,
                 store_name=summary.get('store_name'),

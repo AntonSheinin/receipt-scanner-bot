@@ -3,7 +3,7 @@ Storage Service - S3 and DynamoDB Operations
 """
 import logging
 from datetime import datetime, timezone
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from boto3.dynamodb.conditions import Key, Attr
 
 from config import get_s3_client, get_receipts_table, S3_BUCKET_NAME, setup_logging
@@ -63,28 +63,41 @@ class StorageService:
                 )
                 if 'Item' in existing:
                     logger.info(f"Receipt {receipt_id} already exists, skipping storage")
-                    return True  # Return success since it's already stored
+                    return True
             except Exception as e:
                 logger.warning(f"Error checking for existing receipt: {e}")
             
             # Convert all numeric values to Decimal for DynamoDB
             processed_data = convert_floats_to_decimals(receipt_data)
             
+            # Helper function to ensure non-empty strings for GSI keys
+            def safe_string_value(value: Any, default: str) -> str:
+                """Ensure string value is not None or empty for GSI compatibility"""
+                if value and isinstance(value, str) and value.strip():
+                    return value.strip()
+                return default
+            
+            # Prepare base item
             item = {
                 'user_id': user_id,
                 'receipt_id': receipt_id,
                 'created_at': datetime.now(timezone.utc).isoformat(),
                 'image_url': image_url,
-                'store_name': processed_data.get('store_name', ''),
-                'date': processed_data.get('date', ''),
+                'store_name': safe_string_value(processed_data.get('store_name'), 'Unknown Store'),
+                'payment_method': safe_string_value(processed_data.get('payment_method'), 'other'),
                 'receipt_number': processed_data.get('receipt_number'),
-                'payment_method': processed_data.get('payment_method'),
                 'total': processed_data.get('total'),
                 'items': processed_data.get('items', []),
                 'raw_data': processed_data
             }
             
-            # Remove None values
+            # Handle date field - only add if not empty (for GSI compatibility)
+            date_value = processed_data.get('date')
+            if date_value and isinstance(date_value, str) and date_value.strip():
+                item['date'] = date_value.strip()
+            # If date is empty/None, don't include it - GSI will skip this item
+            
+            # Remove None values (but keep empty strings that we've already handled)
             item = {k: v for k, v in item.items() if v is not None}
             
             # Use conditional put to prevent overwriting
@@ -99,10 +112,10 @@ class StorageService:
         except Exception as e:
             if 'ConditionalCheckFailedException' in str(e):
                 logger.info(f"Receipt {receipt_id} already exists (conditional check failed)")
-                return True  # Already exists, that's fine
+                return True
             logger.error(f"DynamoDB storage error: {e}")
             return False
-    
+        
     def get_filtered_receipts(self, query_plan: Dict, user_id: str) -> List[Dict]:
         """Get filtered receipts from DynamoDB"""
         try:

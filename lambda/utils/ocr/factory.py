@@ -1,16 +1,18 @@
 from typing import Dict, Type
 from .interfaces import OCRProvider
 from .textract_provider import TextractProvider
+from .google_vision_provider import GoogleVisionProvider
 
 class OCRFactory:
     """Simple factory for creating OCR providers"""
     
     _providers: Dict[str, Type[OCRProvider]] = {
-        'textract': TextractProvider
+        'aws_textract': TextractProvider,
+        'google_vision': GoogleVisionProvider
     }
     
     @classmethod
-    def create_provider(cls, provider_name: str = 'textract', **kwargs) -> OCRProvider:
+    def create_provider(cls, provider_name: str, **kwargs) -> OCRProvider:
         """Create an OCR provider instance"""
         if provider_name not in cls._providers:
             available = ', '.join(cls._providers.keys())
@@ -18,8 +20,3 @@ class OCRFactory:
         
         provider_class = cls._providers[provider_name]
         return provider_class(**kwargs)
-    
-    @classmethod
-    def get_available_providers(cls) -> list[str]:
-        """Get list of available provider names"""
-        return list(cls._providers.keys())

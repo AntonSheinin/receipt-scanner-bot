@@ -12,11 +12,11 @@ S3_BUCKET_NAME = os.environ.get('S3_BUCKET_NAME')
 DYNAMODB_TABLE_NAME = os.environ.get('DYNAMODB_TABLE_NAME')
 BEDROCK_REGION = os.environ.get('BEDROCK_REGION')
 
-LLM_PROVIDER = os.environ.get('LLM_PROVIDER', 'bedrock')
+LLM_PROVIDER = os.environ.get('LLM_PROVIDER')
 
 # OCR Configuration
-OCR_PROVIDER = os.environ.get('OCR_PROVIDER', 'textract')
-PROCESSING_MODE = os.environ.get('PROCESSING_MODE', 'auto')
+OCR_PROVIDER = os.environ.get('OCR_PROVIDER')
+PROCESSING_MODE = os.environ.get('PROCESSING_MODE').upper()
 TEXTRACT_REGION = os.environ.get('TEXTRACT_REGION', BEDROCK_REGION)
 
 # Message limits

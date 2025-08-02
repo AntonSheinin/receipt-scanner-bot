@@ -7,7 +7,7 @@ from typing import Dict
 
 from .telegram_service import TelegramService
 from .storage_service import StorageService
-from .document_processor_service import DocumentProcessorService, ProcessingMode
+from .document_processor_service import DocumentProcessorService
 from utils.helpers import create_response
 from config import MAX_ITEMS_DISPLAY, MAX_ITEM_NAME_LENGTH, setup_logging
 
@@ -44,7 +44,7 @@ class ReceiptService:
             
             # Analyze receipt using hybrid processor
             self.telegram.send_message(chat_id, "🔍 Analyzing receipt... Please wait.")
-            receipt_data = self.processor.process_receipt(photo_data, ProcessingMode.AUTO)
+            receipt_data = self.processor.process_receipt(photo_data)
             if not receipt_data:
                 return self.telegram.send_error(chat_id, "Could not process receipt. Please ensure the image is clear and contains a valid receipt.")
             

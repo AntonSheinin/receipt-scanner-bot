@@ -10,7 +10,7 @@ class LLMFactory:
     }
     
     @classmethod
-    def create_provider(cls, provider_name: str = 'bedrock') -> LLMProvider:
+    def create_provider(cls, provider_name: str) -> LLMProvider:
         """Create an LLM provider instance"""
         if provider_name not in cls._providers:
             available = ', '.join(cls._providers.keys())
@@ -19,12 +19,3 @@ class LLMFactory:
         provider_class = cls._providers[provider_name]
         return provider_class()
     
-    @classmethod
-    def register_provider(cls, name: str, provider_class: Type[LLMProvider]) -> None:
-        """Register a new provider (for future use)"""
-        cls._providers[name] = provider_class
-    
-    @classmethod
-    def get_available_providers(cls) -> list[str]:
-        """Get list of available provider names"""
-        return list(cls._providers.keys())
