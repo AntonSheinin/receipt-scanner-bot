@@ -3,9 +3,8 @@ from enum import Enum
 import logging
 
 from config import PROCESSING_MODE, OCR_PROVIDER, LLM_PROVIDER
-from utils.llm.factory import LLMFactory
+from services.llm_service import LLMService
 from utils.ocr.factory import OCRFactory
-from utils.ocr.interfaces import OCRResponse
 
 
 logger = logging.getLogger(__name__)
@@ -19,7 +18,7 @@ class DocumentProcessorService:
     
     def __init__(self):
         self.ocr = OCRFactory.create_provider(OCR_PROVIDER)
-        self.llm = LLMFactory.create_provider(LLM_PROVIDER)
+        self.llm = LLMService(provider_name=LLM_PROVIDER)
         self.processing_mode = PROCESSING_MODE
     
     def process_receipt(self, image_data: bytes) -> Dict:

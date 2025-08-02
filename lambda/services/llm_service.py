@@ -4,7 +4,7 @@ from utils.llm.prompts import PromptManager
 from utils.llm.parsers import ResponseParser
 
 class LLMService:
-    def __init__(self, provider_name: str = 'bedrock'):
+    def __init__(self, provider_name: str):
         self.provider = LLMFactory.create_provider(provider_name)
         self.prompt_manager = PromptManager()
         self.parser = ResponseParser()
@@ -12,7 +12,7 @@ class LLMService:
     def analyze_receipt(self, image_data: bytes) -> Optional[Dict]:
         """Analyze receipt image"""
         prompt = self.prompt_manager.get_receipt_analysis_prompt()
-        response = self.provider.analyze_image(image_data, prompt)
+        response = self.provider.analyze_image(image_data, prompt) 
         
         return self.parser.parse_json_response(response.content) if response else None
     
