@@ -65,37 +65,3 @@ def safe_get(dictionary: Optional[dict[Any, Any]], key: str, default: Any = None
     """
 
     return dictionary.get(key, default) if dictionary else default
-
-
-def truncate_string(text: str, max_length: int, suffix: str = "...") -> str:
-    """
-        Truncate string if longer than max_length
-    """
-
-    if len(text) <= max_length:
-        return text
-    
-    return text[:max_length - len(suffix)] + suffix
-
-
-def format_price(price: Any) -> str:
-    """
-        Format price for display
-    """
-
-    try:
-        return f"{float(price):.2f}"
-    
-    except (ValueError, TypeError):
-        return "$0.00"
-
-
-def clean_hebrew_text(text: str) -> str:
-    """
-        Clean Hebrew text for proper Unicode handling
-    """
-
-    if isinstance(text, str):
-        return text.encode('utf-8').decode('utf-8')
-    
-    return text

@@ -1,5 +1,6 @@
 import json
 import logging
+import urllib3
 from services.telegram_service import TelegramService
 from config import setup_logging
 
@@ -64,7 +65,6 @@ def lambda_handler(event, context) -> dict:
 
 def send_response(event, context, response_status, response_data) -> None:
     """Send response back to CloudFormation"""
-    import urllib3
     
     response_url = event.get('ResponseURL')
     response_body = {

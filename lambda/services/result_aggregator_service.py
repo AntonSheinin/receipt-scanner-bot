@@ -4,7 +4,6 @@ import logging
 from typing import Any, Protocol
 from enum import StrEnum
 from dataclasses import dataclass
-from functools import reduce
 from collections import defaultdict
 
 from config import setup_logging

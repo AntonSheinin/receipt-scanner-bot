@@ -159,7 +159,6 @@ class ReceiptBotStack(Stack):
                 "OCR_PROVIDER": os.getenv('OCR_PROVIDER'),
                 "LLM_PROVIDER": os.getenv('LLM_PROVIDER'),
                 "PROCESSING_MODE": os.getenv('PROCESSING_MODE'),
-                "TEXTRACT_REGION": os.getenv('TEXTRACT_REGION', os.getenv('BEDROCK_REGION')),
                 "GOOGLE_CREDENTIALS_JSON": os.getenv('GOOGLE_CREDENTIALS_JSON')
             },
             log_group=log_group,

@@ -28,8 +28,10 @@ class DocumentProcessorService:
         
         if self.processing_mode == ProcessingMode.LLM_ONLY.value:
             return self._process_with_llm_only(image_data)
+        
         elif self.processing_mode == ProcessingMode.OCR_THEN_LLM.value:
             return self._process_with_ocr_then_llm(image_data)
+        
         else:
             return self._process_with_llm_only(image_data)
     

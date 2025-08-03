@@ -5,6 +5,7 @@ import os
 import logging
 import boto3
 
+
 # Environment variables
 BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 BEDROCK_MODEL_ID = os.environ.get('BEDROCK_MODEL_ID')
@@ -16,8 +17,7 @@ LLM_PROVIDER = os.environ.get('LLM_PROVIDER')
 
 # OCR Configuration
 OCR_PROVIDER = os.environ.get('OCR_PROVIDER')
-PROCESSING_MODE = os.environ.get('PROCESSING_MODE').upper()
-TEXTRACT_REGION = os.environ.get('TEXTRACT_REGION', BEDROCK_REGION)
+PROCESSING_MODE = os.environ.get('PROCESSING_MODE', 'ocr_then_llm').upper()
 
 # Message limits
 MAX_MESSAGE_LENGTH = 4000
@@ -61,7 +61,6 @@ def get_receipts_table():
     if _receipts_table is None and DYNAMODB_TABLE_NAME:
         _receipts_table = get_dynamodb().Table(DYNAMODB_TABLE_NAME)
     return _receipts_table
-
 
 def setup_logging():
     """Setup logging configuration"""

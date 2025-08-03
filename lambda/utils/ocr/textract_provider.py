@@ -205,11 +205,6 @@ class TextractProvider(OCRProvider):
         
         return 'other'
     
-    def _extract_raw_text_from_blocks(self, expense_doc: Dict[str, Any]) -> str:
-        """Extract raw text from expense document blocks"""
-        # This is simplified - in practice you'd extract from the actual blocks
-        return ""
-    
     def _calculate_avg_confidence(self, expense_doc: Dict[str, Any]) -> float:
         """Calculate average confidence score"""
         confidences = []
