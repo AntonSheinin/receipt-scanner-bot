@@ -113,3 +113,23 @@ class DocumentStorage(ABC):
     def batch_write(self, table: str, items: List[Dict[str, Any]]) -> bool:
         """Batch write documents"""
         pass
+
+    @abstractmethod
+    def query_by_date_range(self, table: str, user_id: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:
+        """Query documents by date range"""
+        pass
+    
+    @abstractmethod
+    def query_by_stores(self, table: str, user_id: str, store_names: List[str]) -> List[Dict[str, Any]]:
+        """Query documents by store names"""
+        pass
+    
+    @abstractmethod
+    def query_by_payment_methods(self, table: str, user_id: str, payment_methods: List[str]) -> List[Dict[str, Any]]:
+        """Query documents by payment methods"""
+        pass
+    
+    @abstractmethod
+    def query_user_receipts(self, table: str, user_id: str) -> List[Dict[str, Any]]:
+        """Query all receipts for a user"""
+        pass

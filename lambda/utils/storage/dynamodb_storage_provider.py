@@ -2,7 +2,7 @@ import boto3
 import logging
 from typing import Optional, Dict, List, Any
 from boto3.dynamodb.conditions import Key, Attr
-from interfaces import DocumentStorage
+from provider_interfaces import DocumentStorage
 from config import get_dynamodb, setup_logging
 from utils.helpers import convert_floats_to_decimals, convert_decimals_to_floats
 
@@ -156,3 +156,67 @@ class DynamoDBStorageProvider(DocumentStorage):
             return Attr(filter_expr['attribute']).eq(filter_expr['value'])
         
         return None
+    
+    def query_by_date_range(self, table: str, user_id: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:
+    """Query receipts by date range using DateIndex"""
+    return self.query(
+        table=table,
+        key_condition={
+            'partition_key': {'name': 'user_id', 'value': user_id},
+            'sort_key': {'name': 'date', 'operator': 'between', 'start': start_date, 'end': end_date}
+        },
+        index_name="DateIndex"
+    )
+
+    def query_by_stores(self, table: str, user_id: str, store_names: List[str]) -> List[Dict[str, Any]]:
+        """Query receipts by store names using StoreIndex"""
+        all_receipts = []
+        for store_name in store_names:
+            receipts = self.query(
+                table=table,
+                key_condition={
+                    'partition_key': {'name': 'user_id', 'value': user_id},
+                    'sort_key': {'name': 'store_name', 'operator': 'eq', 'value': store_name}
+                },
+                index_name="StoreIndex"
+            )
+            all_receipts.extend(receipts)
+        
+        # Remove duplicates
+        return self._deduplicate_receipts(all_receipts)
+
+    def query_by_payment_methods(self, table: str, user_id: str, payment_methods: List[str]) -> List[Dict[str, Any]]:
+        """Query receipts by payment methods using PaymentMethodIndex"""
+        all_receipts = []
+        for payment_method in payment_methods:
+            receipts = self.query(
+                table=table,
+                key_condition={
+                    'partition_key': {'name': 'user_id', 'value': user_id},
+                    'sort_key': {'name': 'payment_method', 'operator': 'eq', 'value': payment_method}
+                },
+                index_name="PaymentMethodIndex"
+            )
+            all_receipts.extend(receipts)
+        
+        return self._deduplicate_receipts(all_receipts)
+
+    def query_user_receipts(self, table: str, user_id: str) -> List[Dict[str, Any]]:
+        """Query all receipts for a user"""
+        return self.query(
+            table=table,
+            key_condition={
+                'partition_key': {'name': 'user_id', 'value': user_id}
+            }
+        )
+
+    def _deduplicate_receipts(self, receipts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Remove duplicate receipts by receipt_id"""
+        seen_ids = set()
+        unique_receipts = []
+        for receipt in receipts:
+            receipt_id = receipt.get('receipt_id')
+            if receipt_id and receipt_id not in seen_ids:
+                seen_ids.add(receipt_id)
+                unique_receipts.append(receipt)
+        return unique_receipts

@@ -153,10 +153,10 @@ class StorageService:
             )
             
             if success:
-                # Delete image if exists
+                # Delete image using storage provider abstraction
                 image_url = last_receipt.get('image_url')
-                if image_url and image_url.startswith('s3://'):
-                    self._delete_raw_image(image_url)
+                if image_url:
+                    self._delete_receipt_image(image_url)
                 
                 logger.info(f"Deleted most recent receipt: {receipt_id}")
                 return last_receipt
@@ -195,10 +195,10 @@ class StorageService:
                 )
                 
                 if success:
-                    # Delete image from S3
+                    # Delete image using storage provider abstraction
                     image_url = receipt.get('image_url')
-                    if image_url and image_url.startswith('s3://'):
-                        self._delete_raw_image(image_url)
+                    if image_url:
+                        self._delete_receipt_image(image_url)
                     
                     deleted_count += 1
             
@@ -208,10 +208,47 @@ class StorageService:
         except Exception as e:
             logger.error(f"Delete all receipts error: {e}")
             return 0
+        
+    def _delete_receipt_image(self, image_url: str) -> bool:
+        """Delete receipt image using storage provider abstraction"""
+        try:
+            if not image_url:
+                return False
+            
+            # Extract storage key from URL - make this provider-agnostic
+            storage_key = self._extract_storage_key(image_url)
+            if storage_key:
+                return self.image_storage.delete(storage_key)
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Image deletion error: {e}")
+            return False
+
+    def _extract_storage_key(self, storage_url: str) -> Optional[str]:
+        """Extract storage key from URL in a provider-agnostic way"""
+        try:
+            # Handle different URL formats
+            if storage_url.startswith('s3://'):
+                # S3 format: s3://bucket/key
+                parts = storage_url[5:].split('/', 1)
+                return parts[1] if len(parts) == 2 else None
+            elif storage_url.startswith('https://'):
+                # Could be S3 HTTPS URL or other cloud storage
+                # This would need specific parsing logic based on provider
+                return None
+            else:
+                # Assume it's already a key
+                return storage_url
+                
+        except Exception as e:
+            logger.error(f"Storage key extraction error: {e}")
+            return None
     
     # Helper methods (simplified versions using storage providers)
     def _query_by_date_range(self, user_id: str, date_range: Dict) -> List[Dict]:
-        """Query receipts by date range using DateIndex"""
+        """Query receipts by date range using storage provider"""
         try:
             start_date = date_range.get("start")
             end_date = date_range.get("end")
@@ -219,13 +256,11 @@ class StorageService:
             if not start_date or not end_date:
                 return self._scan_user_receipts(user_id)
             
-            return self.receipt_storage.query(
+            return self.receipt_storage.query_by_date_range(
                 table=self.table_name,
-                key_condition={
-                    'partition_key': {'name': 'user_id', 'value': user_id},
-                    'sort_key': {'name': 'date', 'operator': 'between', 'start': start_date, 'end': end_date}
-                },
-                index_name="DateIndex"
+                user_id=user_id,
+                start_date=start_date,
+                end_date=end_date
             )
             
         except Exception as e:
@@ -233,73 +268,37 @@ class StorageService:
             return self._scan_user_receipts(user_id)
     
     def _query_by_store_names(self, user_id: str, store_names: List[str]) -> List[Dict]:
-        """Query receipts by store names"""
+        """Query receipts by store names using storage provider"""
         try:
-            all_receipts = []
-            
-            for store_name in store_names:
-                receipts = self.receipt_storage.query(
-                    table=self.table_name,
-                    key_condition={
-                        'partition_key': {'name': 'user_id', 'value': user_id},
-                        'sort_key': {'name': 'store_name', 'operator': 'eq', 'value': store_name}
-                    },
-                    index_name="StoreIndex"
-                )
-                all_receipts.extend(receipts)
-            
-            # Remove duplicates
-            seen_ids = set()
-            unique_receipts = []
-            for receipt in all_receipts:
-                if receipt['receipt_id'] not in seen_ids:
-                    seen_ids.add(receipt['receipt_id'])
-                    unique_receipts.append(receipt)
-            
-            return unique_receipts
+            return self.receipt_storage.query_by_stores(
+                table=self.table_name,
+                user_id=user_id,
+                store_names=store_names
+            )
             
         except Exception as e:
             logger.error(f"Store name query error: {e}")
             return self._scan_user_receipts(user_id)
-    
-    def _query_by_payment_methods(self, user_id: str, payment_methods: List[str]) -> List[Dict]:
-        """Query receipts by payment methods"""
+        
+    def _query_by_store_names(self, user_id: str, store_names: List[str]) -> List[Dict]:
+        """Query receipts by store names using storage provider"""
         try:
-            all_receipts = []
-            
-            for payment_method in payment_methods:
-                receipts = self.receipt_storage.query(
-                    table=self.table_name,
-                    key_condition={
-                        'partition_key': {'name': 'user_id', 'value': user_id},
-                        'sort_key': {'name': 'payment_method', 'operator': 'eq', 'value': payment_method}
-                    },
-                    index_name="PaymentMethodIndex"
-                )
-                all_receipts.extend(receipts)
-            
-            # Remove duplicates
-            seen_ids = set()
-            unique_receipts = []
-            for receipt in all_receipts:
-                if receipt['receipt_id'] not in seen_ids:
-                    seen_ids.add(receipt['receipt_id'])
-                    unique_receipts.append(receipt)
-            
-            return unique_receipts
+            return self.receipt_storage.query_by_stores(
+                table=self.table_name,
+                user_id=user_id,
+                store_names=store_names
+            )
             
         except Exception as e:
-            logger.error(f"Payment method query error: {e}")
+            logger.error(f"Store name query error: {e}")
             return self._scan_user_receipts(user_id)
-    
+        
     def _scan_user_receipts(self, user_id: str) -> List[Dict]:
-        """Scan all receipts for a user"""
+        """Scan all receipts for a user using storage provider"""
         try:
-            return self.receipt_storage.query(
+            return self.receipt_storage.query_user_receipts(
                 table=self.table_name,
-                key_condition={
-                    'partition_key': {'name': 'user_id', 'value': user_id}
-                }
+                user_id=user_id
             )
             
         except Exception as e:
