@@ -2,16 +2,20 @@ from typing import Dict, Optional
 from enum import Enum
 import logging
 
-from config import PROCESSING_MODE, OCR_PROVIDER, LLM_PROVIDER
+from config import OCR_PROCESSING_MODE, DOCUMENT_PROCESSING_MODE, OCR_PROVIDER, LLM_PROVIDER, setup_logging
 from services.llm_service import LLMService
 from utils.ocr.factory import OCRFactory
 
-
+setup_logging()
 logger = logging.getLogger(__name__)
 
-class ProcessingMode(Enum):
-    LLM_ONLY = "LLM_ONLY"
-    OCR_THEN_LLM = "OCR_THEN_LLM"
+class OCRProcessingMode(Enum):
+    RAW_TEXT = "raw_text"
+    STRUCTURED_TEXT = "structured_text"
+
+class DocumentProcessingMode(Enum):
+    LLM_ONLY = "llm_only"
+    OCR_THEN_LLM = "ocr_then_llm"
 
 class DocumentProcessorService:
     """Hybrid service for receipt processing using OCR and/or LLM"""
@@ -19,17 +23,18 @@ class DocumentProcessorService:
     def __init__(self):
         self.ocr = OCRFactory.create_provider(OCR_PROVIDER)
         self.llm = LLMService(LLM_PROVIDER)
-        self.processing_mode = PROCESSING_MODE
+        self.document_processing_mode = DOCUMENT_PROCESSING_MODE
+        self.ocr_processing_mode = OCR_PROCESSING_MODE
     
     def process_receipt(self, image_data: bytes) -> Dict:
         """Process receipt using specified mode"""
         
-        logger.info(f"Processing receipt with mode: {self.processing_mode}")
+        logger.info(f"Processing receipt with mode: {self.document_processing_mode}")
         
-        if self.processing_mode == ProcessingMode.LLM_ONLY.value:
+        if self.document_processing_mode == DocumentProcessingMode.LLM_ONLY.value:
             return self._process_with_llm_only(image_data)
-        
-        elif self.processing_mode == ProcessingMode.OCR_THEN_LLM.value:
+
+        elif self.document_processing_mode == DocumentProcessingMode.OCR_THEN_LLM.value:
             return self._process_with_ocr_then_llm(image_data)
         
         else:
@@ -37,6 +42,9 @@ class DocumentProcessorService:
     
     def _process_with_llm_only(self, image_data: bytes) -> Optional[Dict]:
         """Process using LLM only (existing method)"""
+
+        logger.info("Processing receipt with LLM only")
+
         try:
             result = self.llm.analyze_receipt(image_data)
             if result:
@@ -48,9 +56,13 @@ class DocumentProcessorService:
     
     def _process_with_ocr_then_llm(self, image_data: bytes) -> Optional[Dict]:
         """Process using OCR for text extraction, then LLM for structuring"""
+
+        logger.info("Processing receipt with OCR then LLM")
+
         try:
+
             # Step 1: Extract raw text with OCR
-            ocr_result = self.ocr.extract_text(image_data)
+            ocr_result = self.ocr.extract_raw_text(image_data) if self.ocr_processing_mode == OCRProcessingMode.RAW_TEXT.value else self.ocr.extract_receipt_data(image_data)
             
             if not ocr_result.success or not ocr_result.raw_text.strip():
                 logger.warning("OCR failed to extract text, falling back to LLM-only")

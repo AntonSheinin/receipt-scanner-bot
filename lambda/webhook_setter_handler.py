@@ -57,6 +57,7 @@ def lambda_handler(event, context) -> dict:
         response_data = {'Error': str(e)}
 
     send_response(event, context, response_status, response_data)
+    
     return {
         'statusCode': 200 if response_status == "SUCCESS" else 500,
         'body': json.dumps(response_data)

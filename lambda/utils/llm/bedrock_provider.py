@@ -1,8 +1,12 @@
 from typing import Optional, List, Dict, Any
 import json
 import base64
-from .interfaces import LLMProvider, LLMResponse
-from config import get_bedrock_client, BEDROCK_MODEL_ID
+import logging
+from utils.llm.interfaces import LLMProvider, LLMResponse
+from config import get_bedrock_client, BEDROCK_MODEL_ID, setup_logging
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 class BedrockProvider(LLMProvider):
     def __init__(self):

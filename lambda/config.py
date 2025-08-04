@@ -7,6 +7,7 @@ import boto3
 
 
 # Environment variables
+AWS_REGION = os.environ.get('AWS_REGION')
 BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 BEDROCK_MODEL_ID = os.environ.get('BEDROCK_MODEL_ID')
 S3_BUCKET_NAME = os.environ.get('S3_BUCKET_NAME')
@@ -17,7 +18,10 @@ LLM_PROVIDER = os.environ.get('LLM_PROVIDER')
 
 # OCR Configuration
 OCR_PROVIDER = os.environ.get('OCR_PROVIDER')
-PROCESSING_MODE = os.environ.get('PROCESSING_MODE', 'ocr_then_llm').upper()
+OCR_PROCESSING_MODE = os.environ.get('OCR_PROCESSING_MODE')
+
+# Document Processing Mode
+DOCUMENT_PROCESSING_MODE = os.environ.get('DOCUMENT_PROCESSING_MODE')
 
 # Message limits
 MAX_MESSAGE_LENGTH = 4000

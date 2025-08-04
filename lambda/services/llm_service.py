@@ -1,7 +1,12 @@
 from typing import Dict, Optional
+import logging
+from config import setup_logging
 from utils.llm.factory import LLMFactory
 from utils.llm.prompts import PromptManager
 from utils.llm.parsers import ResponseParser
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 class LLMService:
     def __init__(self, provider_name: str):
@@ -11,22 +16,37 @@ class LLMService:
     
     def analyze_receipt(self, image_data: bytes) -> Optional[Dict]:
         """Analyze receipt image"""
+
+        logger.info("Analyzing receipt image with LLM")
+
         prompt = self.prompt_manager.get_receipt_analysis_prompt()
         response = self.provider.analyze_image(image_data, prompt) 
+
+        logger.info(f"LLM response: {response.content if response else 'No response'}")
         
         return self.parser.parse_json_response(response.content) if response else None
     
     def generate_query_plan(self, question: str) -> Optional[Dict]:
         """Generate query plan from natural language"""
+
+        logger.info(f"Generating query plan for question: {question}")
+
         prompt = self.prompt_manager.get_query_plan_prompt(question)
         response = self.provider.generate_text(prompt)
+
+        logger.info(f"LLM query plan response: {response.content if response else 'No response'}")
         
         return self.parser.parse_json_response(response.content) if response else None 
     
     def generate_response(self, question: str, results: Dict) -> Optional[str]:
         """Generate human-readable response"""
+
+        logger.info(f"Generating response for question: {question} with results: {results}")
+
         prompt = self.prompt_manager.get_response_generation_prompt(question, results)
         response = self.provider.generate_text(prompt)
+
+        logger.info(f"LLM response: {response.content if response else 'No response'}")
         
         return response.content if response else None
 
@@ -64,4 +84,7 @@ Rules:
 - Categorize items based on their names and context"""
 
         response = self.provider.generate_text(prompt)
+
+        logger.info(f"LLM structured OCR response: {response.content if response else 'No response'}")
+
         return self.parser.parse_json_response(response.content) if response else None

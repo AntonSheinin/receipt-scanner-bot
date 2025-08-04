@@ -4,19 +4,24 @@ from decimal import Decimal, InvalidOperation
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 from botocore.exceptions import ClientError
+from config import setup_logging, AWS_REGION
 
-from .interfaces import OCRProvider, OCRResponse, LineItem
+from utils.ocr.interfaces import OCRProvider, OCRResponse, LineItem
 
+setup_logging()
 logger = logging.getLogger(__name__)
 
 class TextractProvider(OCRProvider):
     """AWS Textract OCR provider"""
     
-    def __init__(self, region_name: str):
-        self.client = boto3.client('textract', region_name=region_name)
+    def __init__(self):
+        self.client = boto3.client('textract', region_name=AWS_REGION)
     
-    def extract_text(self, image_data: bytes) -> OCRResponse:
+    def extract_raw_text(self, image_data: bytes) -> OCRResponse:
         """Extract raw text using DetectDocumentText"""
+
+        logger.info("Extracting raw text using AWS Textract")
+
         try:
             response = self.client.detect_document_text(
                 Document={'Bytes': image_data}
@@ -33,6 +38,9 @@ class TextractProvider(OCRProvider):
             
             raw_text = '\n'.join(text_lines)
             avg_confidence = sum(confidences) / len(confidences) if confidences else 0
+
+            logger.info(f"Extracted raw text: {raw_text[:100]}...")  # Log first 100 chars
+            logger.info(f"Average confidence: {avg_confidence}")
             
             return OCRResponse(
                 raw_text=raw_text,
@@ -50,6 +58,9 @@ class TextractProvider(OCRProvider):
     
     def extract_receipt_data(self, image_data: bytes) -> OCRResponse:
         """Extract structured receipt data using AnalyzeExpense"""
+
+        logger.info("Extracting structured receipt data using AWS Textract")
+
         try:
             response = self.client.analyze_expense(
                 Document={'Bytes': image_data}
@@ -59,7 +70,7 @@ class TextractProvider(OCRProvider):
 
             expense_docs = response.get('ExpenseDocuments', [])
             if not expense_docs:
-                return self.extract_text(image_data)  # Fallback
+                return self.extract_raw_text(image_data)  # Fallback
             
             expense_doc = expense_docs[0]
             
@@ -90,7 +101,7 @@ class TextractProvider(OCRProvider):
         except ClientError as e:
             logger.error(f"Textract expense analysis error: {e}")
             # Fallback to text extraction
-            return self.extract_text(image_data)
+            return self.extract_raw_text(image_data)
     
     def _extract_summary_fields(self, expense_doc: Dict[str, Any]) -> Dict[str, Any]:
         """Extract summary fields from expense document"""
@@ -215,3 +226,34 @@ class TextractProvider(OCRProvider):
                 confidences.append(confidence)
         
         return sum(confidences) / len(confidences) if confidences else 0.0
+    
+    def _extract_raw_text_from_blocks(self, expense_doc: Dict[str, Any]) -> str:
+        """Extract raw text from Textract expense document blocks"""
+        try:
+            text_lines = []
+            
+            # Extract text from summary fields
+            for field in expense_doc.get('SummaryFields', []):
+                field_text = field.get('Type', {}).get('Text', '')
+                value_text = field.get('ValueDetection', {}).get('Text', '')
+                if field_text:
+                    text_lines.append(field_text)
+                if value_text:
+                    text_lines.append(value_text)
+            
+            # Extract text from line items
+            for group in expense_doc.get('LineItemGroups', []):
+                for line_item in group.get('LineItems', []):
+                    for field in line_item.get('LineItemExpenseFields', []):
+                        field_text = field.get('Type', {}).get('Text', '')
+                        value_text = field.get('ValueDetection', {}).get('Text', '')
+                        if field_text:
+                            text_lines.append(field_text)
+                        if value_text:
+                            text_lines.append(value_text)
+            
+            return '\n'.join(text_lines)
+            
+        except Exception as e:
+            logger.error(f"Error extracting raw text from blocks: {e}")
+            return ""

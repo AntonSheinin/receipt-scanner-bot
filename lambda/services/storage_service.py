@@ -20,7 +20,7 @@ class StorageService:
         self.s3_client = get_s3_client()
         self.receipts_table = get_receipts_table()
     
-    def store_image(self, receipt_id: str, image_data: bytes) -> Optional[str]:
+    def store_raw_image(self, receipt_id: str, image_data: bytes) -> Optional[str]:
         """Store receipt image in S3"""
         try:
             if not S3_BUCKET_NAME:

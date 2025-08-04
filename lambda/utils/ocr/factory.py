@@ -1,7 +1,7 @@
 from typing import Dict, Type
-from .interfaces import OCRProvider
-from .textract_provider import TextractProvider
-from .google_vision_provider import GoogleVisionProvider
+from utils.ocr.interfaces import OCRProvider
+from utils.ocr.aws_textract_provider import TextractProvider
+from utils.ocr.google_vision_provider import GoogleVisionProvider
 
 class OCRFactory:
     """Simple factory for creating OCR providers"""

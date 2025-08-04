@@ -1,14 +1,16 @@
 from google.cloud import vision
 from typing import List, Dict, Any
 from decimal import Decimal
-from .interfaces import LineItem, OCRProvider, OCRResponse
+
+from config import setup_logging
+from utils.ocr.interfaces import LineItem, OCRProvider, OCRResponse
 import json
 import os
 import re   
 import logging
 from google.oauth2 import service_account
 
-
+setup_logging()
 logger = logging.getLogger(__name__)
 
 class GoogleVisionProvider(OCRProvider):
@@ -25,12 +27,43 @@ class GoogleVisionProvider(OCRProvider):
             logger.error("GOOGLE_CREDENTIALS_JSON environment variable not set")
             self.client = vision.ImageAnnotatorClient()
 
+    def extract_raw_text(self, image_data: bytes) -> OCRResponse:
+        """Extract raw text using Google Vision"""
 
-    def extract_text(self, image_data: bytes) -> OCRResponse:
-        return self.extract_receipt_data(image_data)
+        logger.info("Extracting raw text using Google Vision")
+
+        try:
+            image = vision.Image(content=image_data)
+            response = self.client.text_detection(image=image)
+            
+            if response.error.message:
+                raise Exception(response.error.message)
+            
+            texts = response.text_annotations
+            raw_text = texts[0].description if texts else ""
+
+            logger.info(f"Google Vision raw text extracted: {raw_text[:100]}...")
+            logger.info(f"Text confidence: {texts[0].confidence if texts else 'N/A'}")
+
+            return OCRResponse(
+                raw_text=raw_text,
+                confidence=self._calculate_document_confidence(texts),
+                payment_method=self._detect_payment_method(raw_text)
+            )
+            
+        except Exception as e:
+            logger.error(f"Google Vision text extraction error: {e}")
+            return OCRResponse(
+                raw_text="",
+                success=False,
+                error_message=str(e)
+            )
     
     def extract_receipt_data(self, image_data: bytes) -> OCRResponse:
         """Extract structured receipt data using document text detection"""
+
+        logger.info("Extracting structured receipt data using Google Vision")
+
         try:
             image = vision.Image(content=image_data)
             
@@ -44,7 +77,12 @@ class GoogleVisionProvider(OCRProvider):
             structured_data = self._extract_structured_data(response)
             
             # Get raw text for fallback
-            raw_text = response.full_text_annotation.text if response.full_text_annotation else ""
+            text_annotation = getattr(response, 'full_text_annotation', None)
+            raw_text = text_annotation.text if text_annotation else ""
+
+            logger.info(f"Google Vision structured data extracted: {structured_data}")
+            logger.info(f"Google Vision raw text: {raw_text[:100]}...")
+            logger.info(f"Google Vision confidence: {self._calculate_document_confidence(response)}")
             
             return OCRResponse(
                 raw_text=raw_text,
@@ -60,7 +98,7 @@ class GoogleVisionProvider(OCRProvider):
         except Exception as e:
             logger.error(f"Google Vision structured extraction error: {e}")
             # Fallback to basic text extraction
-            return self.extract_text(image_data)
+            return self.extract_raw_text(image_data)
 
     def _extract_structured_data(self, response) -> Dict[str, Any]:
         """Extract structured receipt data from Google Vision document response"""

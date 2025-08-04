@@ -5,7 +5,6 @@ import json
 import logging
 from typing import Optional, List, Dict, Any
 import telebot
-from telebot import types
 
 from config import BOT_TOKEN, MAX_MESSAGE_LENGTH, setup_logging
 
@@ -161,10 +160,10 @@ class TelegramService:
         """Set bot commands for Telegram UI"""
         try:
             commands = [
-                types.BotCommand("start", "Start the bot and show welcome message"),
-                types.BotCommand("help", "Show help information"),
-                types.BotCommand("delete_last", "Delete your most recent receipt"),
-                types.BotCommand("delete_all", "Delete all your receipts"),
+                telebot.types.BotCommand("start", "Start the bot and show welcome message"),
+                telebot.types.BotCommand("help", "Show help information"),
+                telebot.types.BotCommand("delete_last", "Delete your most recent receipt"),
+                telebot.types.BotCommand("delete_all", "Delete all your receipts"),
             ]
 
             logger.info(f"Setting {len(commands)} bot commands")

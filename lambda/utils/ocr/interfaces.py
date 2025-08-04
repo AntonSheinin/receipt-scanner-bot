@@ -33,7 +33,7 @@ class OCRProvider(ABC):
     """Base OCR provider interface"""
     
     @abstractmethod
-    def extract_text(self, image_data: bytes) -> OCRResponse:
+    def extract_raw_text(self, image_data: bytes) -> OCRResponse:
         """Extract raw text from image"""
         pass
     

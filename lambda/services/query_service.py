@@ -8,10 +8,10 @@ from datetime import datetime, timedelta, timezone
 
 from config import LLM_PROVIDER, setup_logging
 
-from .telegram_service import TelegramService
-from .storage_service import StorageService
-from .llm_service import LLMService
-from .result_aggregator_service import ResultAggregatorService, AggregationType
+from services.telegram_service import TelegramService
+from services.storage_service import StorageService
+from services.llm_service import LLMService
+from services.result_aggregator_service import ResultAggregatorService, AggregationType
 from utils.helpers import create_response
 
 
@@ -153,6 +153,7 @@ CRITICAL: Return ONLY the JSON object. Do not include null values or empty array
             logger.error(f"Query plan validation error: {e}")
             return None
 
+        logger.info("Executing query with cleaned plan")
 
         # Get filtered receipts from storage
         receipts = self.storage.get_filtered_receipts(query_plan, user_id)
@@ -196,6 +197,8 @@ CRITICAL: Return ONLY the JSON object. Do not include null values or empty array
             )
 
             result = self.aggregator.aggregate(filtered_receipts, aggregation_type, filter_params)
+
+            logger.info(f"Aggregation result: {result.data}")
                 
             return {
                 "query": query_plan,

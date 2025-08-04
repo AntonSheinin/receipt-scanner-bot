@@ -5,9 +5,9 @@ import logging
 import uuid
 from typing import Dict
 
-from .telegram_service import TelegramService
-from .storage_service import StorageService
-from .document_processor_service import DocumentProcessorService
+from services.telegram_service import TelegramService
+from services.storage_service import StorageService
+from services.document_processor_service import DocumentProcessorService
 from utils.helpers import create_response
 from config import MAX_ITEMS_DISPLAY, MAX_ITEM_NAME_LENGTH, setup_logging
 
@@ -25,30 +25,44 @@ class ReceiptService:
     
     def process_receipt(self, message: Dict, chat_id: int) -> Dict:
         """Process receipt photo end-to-end"""
-        try:
-            self.telegram.send_typing(chat_id)
+
+        self.telegram.send_typing(chat_id)
             
-            # Download photo
-            photo_data = self.telegram.download_photo(message['photo'])
-            if not photo_data:
-                return self.telegram.send_error(chat_id, "Failed to download image. Please try again.")
-            
-            receipt_id = str(uuid.uuid4())
-            user_id = str(chat_id)
-            
-            # Store image
-            self.telegram.send_message(chat_id, "📁 Storing image...")
-            image_url = self.storage.store_image(receipt_id, photo_data)
-            if not image_url:
-                return self.telegram.send_error(chat_id, "Failed to store image. Please try again.")
-            
-            # Analyze receipt using hybrid processor
-            self.telegram.send_message(chat_id, "🔍 Analyzing receipt... Please wait.")
-            receipt_data = self.processor.process_receipt(photo_data)
-            if not receipt_data:
-                return self.telegram.send_error(chat_id, "Could not process receipt. Please ensure the image is clear and contains a valid receipt.")
-            
+        # Download photo
+
+        logger.info("Downloading receipt photo")
+
+        photo_data = self.telegram.download_photo(message['photo'])
+        if not photo_data:
+            return self.telegram.send_error(chat_id, "Failed to download image. Please try again.")
+        
+        receipt_id = str(uuid.uuid4())
+        user_id = str(chat_id)
+
+        # Store image
+
+        logger.info(f"Storing receipt image with ID: {receipt_id} for user: {user_id}")
+
+        self.telegram.send_message(chat_id, "📁 Storing image...")
+        image_url = self.storage.store_raw_image(receipt_id, photo_data)
+        if not image_url:
+            return self.telegram.send_error(chat_id, "Failed to store image. Please try again.")
+
+        # Analyze receipt using hybrid processor
+
+        logger.info(f"Analyzing receipt with ID: {receipt_id}")
+
+        self.telegram.send_message(chat_id, "🔍 Analyzing receipt... Please wait.")
+        receipt_data = self.processor.process_receipt(photo_data)
+
+        if not receipt_data:
+            return self.telegram.send_error(chat_id, "Could not process receipt. Please ensure the image is clear and contains a valid receipt.")
+        
+        try:           
             # Store data and respond
+
+            logger.info(f"Storing receipt data for ID: {receipt_id}")
+
             self.storage.store_receipt_data(receipt_id, user_id, receipt_data, image_url)
             response_text = self._format_receipt_response(receipt_data, receipt_id)
             self.telegram.send_message(chat_id, response_text)

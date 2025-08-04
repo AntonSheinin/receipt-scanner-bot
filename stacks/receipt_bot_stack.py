@@ -12,7 +12,6 @@ from aws_cdk import (
     Duration,
     RemovalPolicy,
     CustomResource,
-    BundlingOptions,
     aws_lambda as _lambda,
     aws_apigatewayv2 as apigwv2,
     aws_apigatewayv2_integrations as integrations,
@@ -144,10 +143,10 @@ class ReceiptBotStack(Stack):
         """Create main Telegram Lambda function"""
         return PythonFunction(
             self, "TelegramHandler",
-            entry="lambda",  # directory containing handler.py and requirements.txt
+            entry="lambda",  # Folder that contains telegram_bot_handler.py and requirements.txt
             runtime=_lambda.Runtime.PYTHON_3_12,
-            index="telegram_handler.py",  # your filename
-            handler="lambda_handler",     # your function inside the file
+            index="telegram_bot_handler.py",  # filename
+            handler="lambda_handler",     # function name inside the file
             role=role,
             timeout=Duration.minutes(5),
             environment={
@@ -158,7 +157,8 @@ class ReceiptBotStack(Stack):
                 "BEDROCK_MODEL_ID": os.getenv('BEDROCK_MODEL_ID'),
                 "OCR_PROVIDER": os.getenv('OCR_PROVIDER'),
                 "LLM_PROVIDER": os.getenv('LLM_PROVIDER'),
-                "PROCESSING_MODE": os.getenv('PROCESSING_MODE'),
+                "DOCUMENT_PROCESSING_MODE": os.getenv('DOCUMENT_PROCESSING_MODE'),
+                "OCR_PROCESSING_MODE": os.getenv('OCR_PROCESSING_MODE'),
                 "GOOGLE_CREDENTIALS_JSON": os.getenv('GOOGLE_CREDENTIALS_JSON')
             },
             log_group=log_group,
@@ -241,6 +241,16 @@ class ReceiptBotStack(Stack):
             handler="lambda_handler",           # Function inside the file
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.minutes(2),
+            environment={
+                "TELEGRAM_BOT_TOKEN": os.getenv('TELEGRAM_BOT_TOKEN'),
+                "BEDROCK_REGION": os.getenv('BEDROCK_REGION'),
+                "BEDROCK_MODEL_ID": os.getenv('BEDROCK_MODEL_ID'),
+                "OCR_PROVIDER": os.getenv('OCR_PROVIDER'),
+                "LLM_PROVIDER": os.getenv('LLM_PROVIDER'),
+                "DOCUMENT_PROCESSING_MODE": os.getenv('DOCUMENT_PROCESSING_MODE'),
+                "OCR_PROCESSING_MODE": os.getenv('OCR_PROCESSING_MODE'),
+                "GOOGLE_CREDENTIALS_JSON": os.getenv('GOOGLE_CREDENTIALS_JSON')
+            },
             log_group=log_group,
             logging_format=_lambda.LoggingFormat.TEXT
         )

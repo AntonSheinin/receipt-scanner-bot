@@ -1,6 +1,6 @@
 from typing import Dict, Type
-from .interfaces import LLMProvider
-from .bedrock_provider import BedrockProvider
+from utils.llm.interfaces import LLMProvider
+from utils.llm.bedrock_provider import BedrockProvider
 
 class LLMFactory:
     """Simple factory for creating LLM providers"""
