@@ -29,6 +29,9 @@ class QueryService:
     
     def process_query(self, question: str, user_id: str) -> Dict:
         """Handle natural language queries in 4 steps"""
+
+        logger.info(f"Processing query: {question}")
+
         chat_id = int(user_id)
         
         try:

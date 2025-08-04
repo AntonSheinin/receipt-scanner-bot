@@ -15,6 +15,9 @@ from services.storage_service import StorageService
 setup_logging()
 logger = logging.getLogger(__name__)
 
+# Track processed updates to avoid duplicates
+_processed_updates = set()
+
 # Initialize services
 telegram_service = TelegramService()
 receipt_service = ReceiptService()
@@ -25,7 +28,23 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """Main Lambda handler for Telegram"""
 
     logger.info(f"Received event: {json.dumps(event, default=str)}")
+
+    # Parse update_id for deduplication
+    body = json.loads(event.get('body', '{}')) if event.get('body') else {}
+    update_id = body.get('update_id')
     
+    # Simple deduplication check
+    if update_id and update_id in _processed_updates:
+        logger.info(f"Update {update_id} already processed, skipping")
+        return create_response(200, {"status": "duplicate"})
+    
+    # Mark as processed
+    if update_id:
+        _processed_updates.add(update_id)
+        # Keep cache small
+        if len(_processed_updates) > 1000:
+            _processed_updates.clear()
+
     # Handle API Gateway health check
     if event.get('httpMethod') == 'GET':
         return create_response(200, {"status": "ok", "message": "Telegram webhook endpoint"})
@@ -131,7 +150,7 @@ def handle_delete_last_command(chat_id: int) -> Dict:
     telegram_service.send_typing(chat_id)
 
     # Make sure we delete by upload date (created_at), not receipt date
-    deleted_receipt = storage_service.delete_last_receipt(str(chat_id))
+    deleted_receipt = storage_service.delete_last_uploaded_receipt(str(chat_id))
     
     if deleted_receipt:
         store_name = deleted_receipt.get('store_name', 'Unknown Store')

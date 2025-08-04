@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 class LLMService:
     def __init__(self, provider_name: str):
-        self.provider = LLMFactory.create_provider(provider_name)
+        self.provider = ProviderFactory.create_llm_provider(provider_name)
         self.prompt_manager = PromptManager()
         self.parser = ResponseParser()
     

@@ -46,6 +46,24 @@ def convert_decimals_to_floats(obj: Any) -> Any:
     
     return obj
 
+def safe_float(value: Any) -> float:
+    """Safely convert value to float"""
+    try:
+        return float(value) if value is not None else 0.0
+    except (ValueError, TypeError):
+        return 0.0
+
+def safe_int(value: Any) -> int:
+    """Safely convert value to int"""
+    try:
+        return int(value) if value is not None else 1
+    except (ValueError, TypeError):
+        return 1
+    
+def safe_string_value(value: Any, default: str) -> str:
+    if value and isinstance(value, str) and value.strip():
+        return value.strip()
+    return default
 
 def create_response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
     """
@@ -57,11 +75,3 @@ def create_response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
         "headers": {"Content-Type": "application/json"},
         "body": json.dumps(body)
     }
-
-
-def safe_get(dictionary: Optional[dict[Any, Any]], key: str, default: Any = None) -> Any:
-    """
-        Safely get value from dictionary
-    """
-
-    return dictionary.get(key, default) if dictionary else default

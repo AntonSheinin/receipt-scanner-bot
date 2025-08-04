@@ -39,15 +39,21 @@ class BedrockProvider(LLMProvider):
             print(f"Bedrock API error: {e}")
             return None
     
-    def generate_text(self, prompt: str, max_tokens: int = 1000) -> Optional[LLMResponse]:
+    def generate_text(self, prompt: str, max_tokens: int = 3000) -> Optional[LLMResponse]:
+        """Generate text response from prompt"""
+
+        logger.info(f"Generating text with llm: {self.model_id}")
+
         messages = [{
             "role": "user",
             "content": [{"type": "text", "text": prompt}]
         }]
         return self._invoke_model(messages, max_tokens)
     
-    def analyze_image(self, image_data: bytes, prompt: str, max_tokens: int = 2000) -> Optional[LLMResponse]:
+    def analyze_image(self, image_data: bytes, prompt: str, max_tokens: int = 3000) -> Optional[LLMResponse]:
         image_base64 = base64.b64encode(image_data).decode('utf-8')
+
+        logger.info(f"Analyzing image with llm: {self.model_id}")
         
         messages = [{
             "role": "user",

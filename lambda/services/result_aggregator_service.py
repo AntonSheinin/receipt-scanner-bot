@@ -3,6 +3,7 @@ from typing import Any, Protocol
 from enum import StrEnum
 from dataclasses import dataclass
 from collections import defaultdict
+from utils.helpers import safe_float, safe_int
 
 from config import setup_logging
 
@@ -37,7 +38,7 @@ class ResultAggregatorService:
     """Service for aggregating receipt data using modern Python patterns"""
     
     def __init__(self) -> None:
-        # Method dispatch table - more pythonic than if/elif chain
+        
         self._aggregators = {
             AggregationType.COUNT_RECEIPTS: self._count_receipts,
             AggregationType.SUM_TOTAL: self._sum_total,
@@ -52,6 +53,9 @@ class ResultAggregatorService:
                   aggregation_type: AggregationType, 
                   filter_params: dict[str, Any]) -> AggregationResult:
         """Main aggregation dispatcher using method dispatch table"""
+
+        logger.info(f"Aggregating {len(receipts)} receipts with type: {aggregation_type}")
+
         try:
             aggregator = self._aggregators.get(aggregation_type, self._count_receipts)
             return aggregator(receipts, filter_params)
@@ -65,6 +69,9 @@ class ResultAggregatorService:
     def _count_receipts(self, receipts: list[dict[str, Any]], 
                        _: dict[str, Any]) -> AggregationResult:
         """Count receipts - simple and clean"""
+
+        logger.info(f"Counting receipts: {len(receipts)} found")
+
         return AggregationResult(
             data={"count": len(receipts)}, 
             result_type="count"
@@ -73,8 +80,11 @@ class ResultAggregatorService:
     def _sum_total(self, receipts: list[dict[str, Any]], 
                    _: dict[str, Any]) -> AggregationResult:
         """Sum total using generator expression for memory efficiency"""
+
+        logger.info("Calculating total spent across all receipts")
+
         total = sum(
-            self._safe_float(receipt.get('total', 0)) 
+            safe_float(receipt.get('total', 0)) 
             for receipt in receipts 
             if receipt.get('total')
         )
@@ -90,6 +100,9 @@ class ResultAggregatorService:
     def _sum_by_category(self, receipts: list[dict[str, Any]], 
                         filter_params: dict[str, Any]) -> AggregationResult:
         """Category breakdown using defaultdict and comprehensions"""
+
+        logger.info("Calculating total spent by category")
+
         categories = filter_params.get("categories", [])
         category_sums = defaultdict(float)
         
@@ -100,8 +113,8 @@ class ResultAggregatorService:
                 if categories and not self._category_matches(item_category, categories):
                     continue
                 
-                price = (self._safe_float(item.get('price', 0)) * 
-                        self._safe_int(item.get('quantity', 1)))
+                price = (safe_float(item.get('price', 0)) * 
+                        safe_int(item.get('quantity', 1)))
                 category_sums[item_category] += price
         
         # Convert defaultdict to regular dict with rounding
@@ -120,6 +133,9 @@ class ResultAggregatorService:
                        filter_params: dict[str, Any],
                        price_func: callable) -> AggregationResult:
         """Unified min/max price by store using callable parameter"""
+
+        logger.info(f"Calculating {price_func.__name__} price by store")
+
         keywords = filter_params.get("item_keywords", [])
         categories = filter_params.get("categories", [])
         store_prices: dict[str, float] = {}
@@ -129,10 +145,10 @@ class ResultAggregatorService:
             
             # Use walrus operator for cleaner logic
             if matching_prices := [
-                self._safe_float(item.get('price', 0))
+                safe_float(item.get('price', 0))
                 for item in receipt.get('items', [])
                 if (self._item_matches_criteria(item, keywords, categories) and 
-                    self._safe_float(item.get('price', 0)) > 0)
+                    safe_float(item.get('price', 0)) > 0)
             ]:
                 current_price = price_func(matching_prices)
                 store_prices[store] = (
@@ -154,6 +170,9 @@ class ResultAggregatorService:
     def _sum_by_payment(self, receipts: list[dict[str, Any]], 
                        filter_params: dict[str, Any]) -> AggregationResult:
         """Payment method breakdown using comprehension"""
+
+        logger.info("Calculating total spent by payment method")
+
         payment_methods = filter_params.get("payment_methods", [])
         
         payment_sums = defaultdict(float)
@@ -161,7 +180,7 @@ class ResultAggregatorService:
             payment_method = receipt.get('payment_method', 'other')
             
             if not payment_methods or payment_method in payment_methods:
-                payment_sums[payment_method] += self._safe_float(receipt.get('total', 0))
+                payment_sums[payment_method] += safe_float(receipt.get('total', 0))
         
         rounded_sums = {k: round(v, 2) for k, v in payment_sums.items()}
         
@@ -177,6 +196,9 @@ class ResultAggregatorService:
     def _list_stores(self, receipts: list[dict[str, Any]], 
                     _: dict[str, Any]) -> AggregationResult:
         """List unique stores using set comprehension"""
+
+        logger.info("Listing unique stores from receipts")
+
         stores = list({
             receipt.get('store_name', 'Unknown') 
             for receipt in receipts
@@ -191,25 +213,11 @@ class ResultAggregatorService:
             result_type="store_list"
         )
     
-    # Helper methods - more robust and type-safe
-    def _safe_float(self, value: Any) -> float:
-        """Safely convert value to float"""
-        try:
-            return float(value) if value is not None else 0.0
-        except (ValueError, TypeError):
-            return 0.0
-    
-    def _safe_int(self, value: Any) -> int:
-        """Safely convert value to int"""
-        try:
-            return int(value) if value is not None else 1
-        except (ValueError, TypeError):
-            return 1
-    
     def _item_matches_criteria(self, item: dict[str, Any], 
                               keywords: list[str], 
                               categories: list[str]) -> bool:
         """Check if item matches criteria using all()"""
+        
         item_name = item.get('name', '').lower()
         item_category = item.get('category', '').lower()
         

@@ -39,7 +39,7 @@ class TextractProvider(OCRProvider):
             raw_text = '\n'.join(text_lines)
             avg_confidence = sum(confidences) / len(confidences) if confidences else 0
 
-            logger.info(f"Extracted raw text: {raw_text[:100]}...")  # Log first 100 chars
+            logger.info(f"Extracted raw text: {raw_text}")  # Log first 100 chars
             logger.info(f"Average confidence: {avg_confidence}")
             
             return OCRResponse(
@@ -85,7 +85,7 @@ class TextractProvider(OCRProvider):
             
             logger.info(f"Extracted {len(items)} items from receipt")
             logger.info(f"Extracted items: {items}")
-            logger.info(f"Extracted raw text: {raw_text}")
+            logger.info(f"Extracted raw text: {raw_text[:100]}...") 
 
             return OCRResponse(
                 raw_text=raw_text,

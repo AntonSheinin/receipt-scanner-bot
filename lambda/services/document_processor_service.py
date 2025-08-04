@@ -4,7 +4,7 @@ import logging
 
 from config import OCR_PROCESSING_MODE, DOCUMENT_PROCESSING_MODE, OCR_PROVIDER, LLM_PROVIDER, setup_logging
 from services.llm_service import LLMService
-from utils.ocr.factory import OCRFactory
+from provider_factory import ProviderFactory
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ class DocumentProcessorService:
     """Hybrid service for receipt processing using OCR and/or LLM"""
     
     def __init__(self):
-        self.ocr = OCRFactory.create_provider(OCR_PROVIDER)
+        self.ocr = ProviderFactory.create_ocr_provider(OCR_PROVIDER)
         self.llm = LLMService(LLM_PROVIDER)
         self.document_processing_mode = DOCUMENT_PROCESSING_MODE
         self.ocr_processing_mode = OCR_PROCESSING_MODE

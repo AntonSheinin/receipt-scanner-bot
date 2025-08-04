@@ -29,9 +29,9 @@ class GoogleVisionProvider(OCRProvider):
 
     def extract_raw_text(self, image_data: bytes) -> OCRResponse:
         """Extract raw text using Google Vision"""
-
+        
         logger.info("Extracting raw text using Google Vision")
-
+        
         try:
             image = vision.Image(content=image_data)
             response = self.client.text_detection(image=image)
@@ -41,13 +41,13 @@ class GoogleVisionProvider(OCRProvider):
             
             texts = response.text_annotations
             raw_text = texts[0].description if texts else ""
-
-            logger.info(f"Google Vision raw text extracted: {raw_text[:100]}...")
-            logger.info(f"Text confidence: {texts[0].confidence if texts else 'N/A'}")
-
+            
+            
+            logger.info(f"Google Vision raw text extracted: {raw_text}")
+            
             return OCRResponse(
                 raw_text=raw_text,
-                confidence=self._calculate_document_confidence(texts),
+                confidence=0.0,  # text_detection() does not provide confidence for raw text
                 payment_method=self._detect_payment_method(raw_text)
             )
             
@@ -77,12 +77,12 @@ class GoogleVisionProvider(OCRProvider):
             structured_data = self._extract_structured_data(response)
             
             # Get raw text for fallback
-            text_annotation = getattr(response, 'full_text_annotation', None)
-            raw_text = text_annotation.text if text_annotation else ""
+            raw_text = response.full_text_annotation.text if response.full_text_annotation else ""
+            confidence = self._calculate_document_confidence(response)
 
             logger.info(f"Google Vision structured data extracted: {structured_data}")
             logger.info(f"Google Vision raw text: {raw_text[:100]}...")
-            logger.info(f"Google Vision confidence: {self._calculate_document_confidence(response)}")
+            logger.info(f"Google Vision confidence: {confidence}")
             
             return OCRResponse(
                 raw_text=raw_text,
@@ -92,7 +92,7 @@ class GoogleVisionProvider(OCRProvider):
                 total=structured_data.get('total'),
                 payment_method=structured_data.get('payment_method') or self._detect_payment_method(raw_text),
                 items=structured_data.get('items', []),
-                confidence=self._calculate_document_confidence(response)
+                confidence=confidence,
             )
             
         except Exception as e:
@@ -192,7 +192,7 @@ class GoogleVisionProvider(OCRProvider):
         
         food_keywords = ['bread', 'milk', 'cheese', 'meat', 'fruit', 'vegetable']
         beverage_keywords = ['juice', 'water', 'soda', 'coffee', 'tea']
-        household_keywords = ['soap', 'detergent', 'paper', 'towel', 'cas', 'gasoline']
+        household_keywords = ['soap', 'detergent', 'paper', 'towel', 'cas', 'gasoline', 'octane']
     
         if any(keyword in name_lower for keyword in food_keywords):
             return 'food'
@@ -236,10 +236,7 @@ class GoogleVisionProvider(OCRProvider):
         
         text_lower = text.lower()
         
-        # Cash indicators
         cash_indicators = ['מזומן', 'מזומנים', 'cash']
-        
-        # Card indicators
         card_indicators = ['אשראי', 'כרטיס', 'ויזה', 'מאסטרקארד', 'card', 'credit', 'visa', 'mastercard', 'debit']
         
         if any(indicator in text_lower for indicator in cash_indicators):
