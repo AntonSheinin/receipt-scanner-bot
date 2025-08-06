@@ -2,7 +2,7 @@ from typing import Optional, List, Dict, Any
 import json
 import base64
 import logging
-from utils.llm.interfaces import LLMProvider, LLMResponse
+from provider_interfaces import LLMProvider, LLMResponse
 from config import get_bedrock_client, BEDROCK_MODEL_ID, setup_logging
 
 setup_logging()

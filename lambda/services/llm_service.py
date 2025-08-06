@@ -1,7 +1,7 @@
 from typing import Dict, Optional
 import logging
 from config import setup_logging
-from utils.llm.factory import LLMFactory
+from provider_factory import ProviderFactory
 from utils.llm.prompts import PromptManager
 from utils.llm.parsers import ResponseParser
 
@@ -13,19 +13,19 @@ class LLMService:
         self.provider = ProviderFactory.create_llm_provider(provider_name)
         self.prompt_manager = PromptManager()
         self.parser = ResponseParser()
-    
+
     def analyze_receipt(self, image_data: bytes) -> Optional[Dict]:
         """Analyze receipt image"""
 
         logger.info("Analyzing receipt image with LLM")
 
         prompt = self.prompt_manager.get_receipt_analysis_prompt()
-        response = self.provider.analyze_image(image_data, prompt) 
+        response = self.provider.analyze_image(image_data, prompt)
 
         logger.info(f"LLM response: {response.content if response else 'No response'}")
-        
+
         return self.parser.parse_json_response(response.content) if response else None
-    
+
     def generate_query_plan(self, question: str) -> Optional[Dict]:
         """Generate query plan from natural language"""
 
@@ -35,9 +35,9 @@ class LLMService:
         response = self.provider.generate_text(prompt)
 
         logger.info(f"LLM query plan response: {response.content if response else 'No response'}")
-        
-        return self.parser.parse_json_response(response.content) if response else None 
-    
+
+        return self.parser.parse_json_response(response.content) if response else None
+
     def generate_response(self, question: str, results: Dict) -> Optional[str]:
         """Generate human-readable response"""
 
@@ -47,7 +47,7 @@ class LLMService:
         response = self.provider.generate_text(prompt)
 
         logger.info(f"LLM response: {response.content if response else 'No response'}")
-        
+
         return response.content if response else None
 
     def structure_ocr_text(self, ocr_text: str) -> Optional[Dict]:
@@ -61,7 +61,7 @@ Extract the following information in valid JSON format ONLY:
 
 {{
     "store_name": "name of the store/business",
-    "date": "date in YYYY-MM-DD format", 
+    "date": "date in YYYY-MM-DD format",
     "receipt_number": "receipt/transaction number if available",
     "payment_method": "cash|credit_card|other",
     "items": [

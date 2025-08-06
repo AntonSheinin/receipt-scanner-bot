@@ -3,6 +3,7 @@
 """
 
 import json
+from datetime import datetime
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -14,15 +15,6 @@ def convert_floats_to_decimals(obj: Any) -> Any:
         return None
     elif isinstance(obj, (int, float)):
         return Decimal(str(obj))
-    elif isinstance(obj, str):
-        # Try to convert numeric strings to Decimal
-        try:
-            if '.' in obj or obj.isdigit():
-                float(obj)  # Validate it's a valid number
-                return Decimal(obj)
-        except ValueError:
-            pass
-        return obj
     elif isinstance(obj, dict):
         return {k: convert_floats_to_decimals(v) for k, v in obj.items()}
     elif isinstance(obj, list):
@@ -37,13 +29,13 @@ def convert_decimals_to_floats(obj: Any) -> Any:
 
     if isinstance(obj, Decimal):
         return float(obj)
-    
+
     if isinstance(obj, dict):
         return {k: convert_decimals_to_floats(v) for k, v in obj.items()}
-    
+
     if isinstance(obj, list):
         return [convert_decimals_to_floats(v) for v in obj]
-    
+
     return obj
 
 def safe_float(value: Any) -> float:
@@ -59,11 +51,27 @@ def safe_int(value: Any) -> int:
         return int(value) if value is not None else 1
     except (ValueError, TypeError):
         return 1
-    
+
 def safe_string_value(value: Any, default: str) -> str:
     if value and isinstance(value, str) and value.strip():
         return value.strip()
     return default
+
+def normalize_date(date_str: str) -> Optional[str]:
+        """Normalize date to YYYY-MM-DD format"""
+        if not date_str:
+            return None
+
+        formats = ['%d/%m/%Y', '%m/%d/%Y', '%Y-%m-%d', '%d-%m-%Y']
+
+        for fmt in formats:
+            try:
+                dt = datetime.strptime(date_str.strip(), fmt)
+                return dt.strftime('%Y-%m-%d')
+            except ValueError:
+                continue
+
+        return date_str  # Return as-is if can't parse
 
 def create_response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
     """
