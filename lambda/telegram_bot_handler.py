@@ -3,7 +3,7 @@ Main Telegram Lambda Handler - Entry Point
 """
 import json
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from config import setup_logging
 from services.receipt_service import ReceiptService
@@ -24,7 +24,7 @@ receipt_service = ReceiptService()
 query_service = QueryService()
 storage_service = StorageService()
 
-def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def lambda_handler(event: Dict[str, Any], context: Any) -> Optional[Dict[str, Any]]:
     """Main Lambda handler for Telegram"""
 
     logger.info(f"Received event: {json.dumps(event, default=str)}")
@@ -32,12 +32,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     # Parse update_id for deduplication
     body = json.loads(event.get('body', '{}')) if event.get('body') else {}
     update_id = body.get('update_id')
-    
+
     # Simple deduplication check
     if update_id and update_id in _processed_updates:
         logger.info(f"Update {update_id} already processed, skipping")
         return create_response(200, {"status": "duplicate"})
-    
+
     # Mark as processed
     if update_id:
         _processed_updates.add(update_id)
@@ -48,35 +48,35 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     # Handle API Gateway health check
     if event.get('httpMethod') == 'GET':
         return create_response(200, {"status": "ok", "message": "Telegram webhook endpoint"})
-    
+
     # Parse Telegram update
     raw_body = event.get('body')
     body = json.loads(raw_body) if isinstance(raw_body, str) else raw_body
     if not body:
         logger.error("No body in event, ignoring")
         return create_response(200, {"status": "No body in event"})
-    
+
     logger.info(f"Parsed body: {json.dumps(body, default=str)}")
 
     message = body.get('message')
     if not message:
         logger.error("No message in body, ignoring")
         return create_response(200, {"status": "no message"})
-    
+
     # Process message after responding to Telegram
     chat_id = message['chat']['id']
 
     text = message.get('text', '').strip().lower()
-        
+
     if text in ('/start', '/help'):
         logger.info("Handling /start or /help command")
         telegram_service.send_message(chat_id, get_welcome_message())
         return create_response(200, {"status": "handled welcome message"})
-    
+
     elif text == '/delete_last':
         logger.info("Handling /delete_last command")
         return handle_delete_last_command(chat_id)
-    
+
     elif text == '/delete_all':
         logger.info("Handling /delete_all command")
         return handle_delete_all_command(chat_id)
@@ -86,9 +86,9 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         telegram_service.send_typing(chat_id)
         telegram_service.send_message(chat_id, "📸 Processing your receipt... Please wait.")
 
-        try:    
+        try:
             receipt_service.process_receipt(message, chat_id)
-            
+
         except Exception as e:
             logger.error(f"Receipt processing error: {e}", exc_info=True)
             telegram_service.send_message(chat_id, "❌ Failed to process receipt. Please try again.")
@@ -104,7 +104,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         except Exception as e:
             logger.error(f"Query processing error: {e}", exc_info=True)
             telegram_service.send_message(chat_id, "❌ Failed to process your query. Please try again.")
-            
+
         return create_response(200, {"status": "processing"})
 
 def get_welcome_message() -> str:
@@ -114,7 +114,7 @@ def get_welcome_message() -> str:
         "Send me a photo of your receipt and I'll extract the structured data!\n\n"
         "I can recognize:\n"
         "• Store name\n"
-        "• Date\n" 
+        "• Date\n"
         "• Receipt number\n"
         "• Items with prices\n"
         "• Total amount\n\n"
@@ -151,13 +151,13 @@ def handle_delete_last_command(chat_id: int) -> Dict:
 
     # Make sure we delete by upload date (created_at), not receipt date
     deleted_receipt = storage_service.delete_last_uploaded_receipt(str(chat_id))
-    
+
     if deleted_receipt:
         store_name = deleted_receipt.get('store_name', 'Unknown Store')
         receipt_date = deleted_receipt.get('date', 'Unknown Date')
         upload_date = deleted_receipt.get('created_at', 'Unknown Upload Date')
         total = deleted_receipt.get('total', '0.00')
-        
+
         message = (
             "🗑️ *Last Uploaded Receipt Deleted*\n\n"
             f"🏪 Store: {store_name}\n"
@@ -172,18 +172,18 @@ def handle_delete_last_command(chat_id: int) -> Dict:
     else:
         logger.info("No receipts found to delete")
         message = "❌ No receipts found to delete. Upload some receipts first!"
-    
+
     telegram_service.send_message(chat_id, message)
     return create_response(200, {"status": "delete_last_command_handled"})
 
 def handle_delete_all_command(chat_id: int) -> Dict:
     """Handle /delete-all command"""
-        
+
     telegram_service.send_typing(chat_id)
     telegram_service.send_message(chat_id, "🗑️ Deleting all receipts... Please wait.")
-    
+
     deleted_count = storage_service.delete_all_receipts(str(chat_id))
-    
+
     if deleted_count > 0:
         message = (
             "🗑️ *All Receipts Deleted Successfully*\n\n"
