@@ -73,10 +73,6 @@ class ImageStorage(ABC):
         """Check if image exists"""
         pass
 
-    @abstractmethod
-    def generate_url(self, key: str, expires_in: int = 3600) -> Optional[str]:
-        """Generate presigned URL"""
-        pass
 
 class DocumentStorage(ABC):
     """Interface for storing and retrieving documents/records"""
@@ -107,11 +103,6 @@ class DocumentStorage(ABC):
     @abstractmethod
     def delete(self, table: str, key: Dict[str, Any]) -> bool:
         """Delete document"""
-        pass
-
-    @abstractmethod
-    def batch_write(self, table: str, items: List[Dict[str, Any]]) -> bool:
-        """Batch write documents"""
         pass
 
     @abstractmethod

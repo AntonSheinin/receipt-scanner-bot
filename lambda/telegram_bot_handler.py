@@ -110,7 +110,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Optional[Dict[str, An
 def get_welcome_message() -> str:
     """Get welcome message for bot"""
     return (
-        "🧾 *Receipt Recognition Bot*\n\n"
+        "🧾 *Receipt Scanner Bot*\n\n"
         "Send me a photo of your receipt and I'll extract the structured data!\n\n"
         "I can recognize:\n"
         "• Store name\n"

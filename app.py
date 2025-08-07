@@ -1,10 +1,10 @@
 """
-Receipt Bot MVP - CDK App Entry Point
+Receipt Scanner Bot MVP - CDK App Entry Point
 """
 import os
 from dotenv import load_dotenv
 import aws_cdk as cdk
-from stacks.receipt_bot_stack import ReceiptBotStack
+from stacks.receipt_scanner_bot_stack import ReceiptScannerBotStack
 
 
 # Load environment variables from .env file
@@ -18,12 +18,12 @@ env = cdk.Environment(
     region=os.getenv("AWS_REGION", "eu-west-1")
 )
 
-# Deploy the receipt bot stack
-ReceiptBotStack(
-    app, 
-    "ReceiptBotStack",
+# Deploy the receipt scanner bot stack
+ReceiptScannerBotStack(
+    app,
+    "ReceiptScannerBotStack",
     env=env,
-    description="Receipt Recognition Telegram Bot MVP"
+    description="Receipt Scanner Telegram Bot MVP"
 )
 
 app.synth()

@@ -1,5 +1,5 @@
 """
-Receipt Bot Stack - AWS CDK Infrastructure
+Receipt Scanner Bot Stack - AWS CDK Infrastructure
 """
 
 import os
@@ -25,7 +25,7 @@ from aws_cdk import (
 from constructs import Construct
 
 
-class ReceiptBotStack(Stack):
+class ReceiptScannerBotStack(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs: Any) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -60,8 +60,8 @@ class ReceiptBotStack(Stack):
     def _create_main_log_group(self) -> logs.LogGroup:
         """Create single log group for all components"""
         return logs.LogGroup(
-            self, "ReceiptBotLogGroup",
-            log_group_name="/aws/receipt-bot/all-logs",
+            self, "ReceiptScannerBotLogGroup",
+            log_group_name="/aws/receipt-scanner-bot/all-logs",
             retention=logs.RetentionDays.ONE_WEEK,
             removal_policy=RemovalPolicy.DESTROY
         )
@@ -180,8 +180,8 @@ class ReceiptBotStack(Stack):
         # Create the HTTP API
         api = apigwv2.HttpApi(
             self, "TelegramWebhookHttpApi",
-            api_name="Receipt Bot Webhook",
-            description="Telegram webhook endpoint for receipt bot"
+            api_name="Receipt Scanner Bot Webhook",
+            description="Telegram webhook endpoint for receipt scanner bot"
         )
 
         # Add webhook route
