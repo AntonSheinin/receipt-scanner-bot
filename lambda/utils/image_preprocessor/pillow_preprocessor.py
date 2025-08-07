@@ -25,7 +25,7 @@ class EnhancementConfig:
     """Configuration for image enhancement"""
     mode: ProcessingMode = ProcessingMode.QUALITY
     target_width: int = 2400
-    contrast_factor: float = 1.5
+    contrast_factor: float = 1.5 # between 1.5–2.5 depending on OCR results
     brightness_factor: float = 1.1
     sharpness_factor: float = 2.0
     jpeg_quality: int = 95
@@ -207,15 +207,3 @@ class ImagePreprocessorPillow:
             logger.warning(f"Sharpening failed: {e}")
             return img
 
-    def _apply_threshold(self, img: Image.Image, threshold: int = 128) -> Image.Image:
-        """Apply binary threshold"""
-        try:
-            # Convert to grayscale first
-            if img.mode != 'L':
-                img = img.convert('L')
-
-            # Apply threshold
-            return img.point(lambda x: 255 if x > threshold else 0, mode='1')
-        except Exception as e:
-            logger.warning(f"Threshold failed: {e}")
-            return img

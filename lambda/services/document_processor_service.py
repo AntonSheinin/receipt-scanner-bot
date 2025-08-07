@@ -3,6 +3,7 @@ from enum import Enum
 import logging
 
 from config import OCR_PROCESSING_MODE, DOCUMENT_PROCESSING_MODE, OCR_PROVIDER, LLM_PROVIDER, setup_logging
+from services.storage_service import StorageService
 from services.llm_service import LLMService
 from provider_factory import ProviderFactory
 from utils.image_preprocessor.pillow_preprocessor import ImagePreprocessorPillow
@@ -46,7 +47,7 @@ class DocumentProcessorService:
         else:
             return self._process_llm(image_data)
 
-    def _process_llm(self, image_data: bytes) -> Optional[Dict]:
+    def _process_llm(self, image_data: bytes) -> dict | None:
         """Process using LLM only (existing method)"""
 
         logger.info("Processing receipt with LLM only")
@@ -98,5 +99,9 @@ class DocumentProcessorService:
         # Enhance image before OCR
         logger.info("Enhancing receipt image for better OCR accuracy")
         image_data = self.image_preprocessor.enhance_image(image_data)
+
+        # Store the enhanced image
+        storage = StorageService()
+        image_url = storage.store_raw_image("test", image_data)
 
         return self._process_ocr_llm(image_data)

@@ -160,7 +160,9 @@ class ReceiptBotStack(Stack):
                 "LLM_PROVIDER": os.getenv('LLM_PROVIDER'),
                 "DOCUMENT_PROCESSING_MODE": os.getenv('DOCUMENT_PROCESSING_MODE'),
                 "OCR_PROCESSING_MODE": os.getenv('OCR_PROCESSING_MODE'),
-                "GOOGLE_CREDENTIALS_JSON": os.getenv('GOOGLE_CREDENTIALS_JSON')
+                "GOOGLE_CREDENTIALS_JSON": os.getenv('GOOGLE_CREDENTIALS_JSON'),
+                "OPENAI_API_KEY": os.getenv('OPENAI_API_KEY'),
+                "OPENAI_MODEL_ID": os.getenv('OPENAI_MODEL_ID')
             },
             log_group=log_group,
             logging_format=_lambda.LoggingFormat.TEXT
@@ -250,7 +252,9 @@ class ReceiptBotStack(Stack):
                 "LLM_PROVIDER": os.getenv('LLM_PROVIDER'),
                 "DOCUMENT_PROCESSING_MODE": os.getenv('DOCUMENT_PROCESSING_MODE'),
                 "OCR_PROCESSING_MODE": os.getenv('OCR_PROCESSING_MODE'),
-                "GOOGLE_CREDENTIALS_JSON": os.getenv('GOOGLE_CREDENTIALS_JSON')
+                "GOOGLE_CREDENTIALS_JSON": os.getenv('GOOGLE_CREDENTIALS_JSON'),
+                "OPENAI_API_KEY": os.getenv('OPENAI_API_KEY'),
+                "OPENAI_MODEL_ID": os.getenv('OPENAI_MODEL_ID')
             },
             log_group=log_group,
             logging_format=_lambda.LoggingFormat.TEXT
