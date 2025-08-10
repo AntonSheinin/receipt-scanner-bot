@@ -34,7 +34,7 @@ class ReceiptService:
 
         photo_data = self.telegram.download_photo(message['photo'])
         if not photo_data:
-            return self.telegram.send_error(chat_id, "Failed to download image. Please try again.")
+            return self.telegram.send_error(chat_id, "העלאת התמונה נכשלה. נא לנסות שוב.")
 
         receipt_id = str(uuid.uuid4())
         user_id = str(chat_id)
@@ -43,20 +43,20 @@ class ReceiptService:
 
         logger.info(f"Storing receipt image with ID: {receipt_id} for user: {user_id}")
 
-        self.telegram.send_message(chat_id, "📁 Storing image...")
+        self.telegram.send_message(chat_id, "📁 שומר את התמונה...")
         image_url = self.storage.store_raw_image(receipt_id, photo_data)
         if not image_url:
-            return self.telegram.send_error(chat_id, "Failed to store image. Please try again.")
+            return self.telegram.send_error(chat_id, "שגיאה בשמירת התמונה. נא לנסות שוב.")
 
         # Analyze receipt using hybrid processor
 
         logger.info(f"Analyzing receipt with ID: {receipt_id}")
 
-        self.telegram.send_message(chat_id, "🔍 Analyzing receipt... Please wait.")
+        self.telegram.send_message(chat_id, "🔍 מנתח את הקבלה... נא להמתין.")
         receipt_data = self.processor.process_receipt(photo_data)
 
         if not receipt_data:
-            return self.telegram.send_error(chat_id, "Could not process receipt. Please ensure the image is clear and contains a valid receipt.")
+            return self.telegram.send_error(chat_id, "לא ניתן לעבד את הקבלה. נא לוודא שהתמונה ברורה ומכילה קבלה תקפה.")
 
         try:
             # Store data and respond
@@ -65,13 +65,13 @@ class ReceiptService:
 
             self.storage.store_receipt_data(receipt_id, user_id, receipt_data, image_url)
             response_text = self._format_receipt_response(receipt_data, receipt_id)
-            self.telegram.send_message(chat_id, response_text)
+            self.telegram.send_message(chat_id, response_text, parse_mode=None)
 
             return create_response(200, {"status": "success"})
 
         except Exception as e:
             logger.error(f"Receipt processing error: {e}", exc_info=True)
-            return self.telegram.send_error(chat_id, "An error occurred while processing your receipt.")
+            return self.telegram.send_error(chat_id, "שגיאה במהלך עיבוד הקבלה .")
 
     def _format_receipt_response(self, receipt_data: Dict, receipt_id: str) -> str:
         """Format receipt data for Telegram with Hebrew support"""
@@ -184,4 +184,4 @@ class ReceiptService:
 
         except Exception as e:
             logger.error(f"Formatting error: {e}")
-            return f"✅ הקבלה עובדה בהצלחה! \n\n🆔 *מזהה | ID: `{receipt_id}`\n✅ נשמר במסד הנתונים"
+            return f"✅ הקבלה עובדה בהצלחה! \n\n🆔 מזהה : `{receipt_id}`\n✅ נשמר במסד הנתונים"
