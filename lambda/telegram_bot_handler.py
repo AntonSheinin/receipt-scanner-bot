@@ -10,6 +10,7 @@ from services.receipt_service import ReceiptService
 from services.query_service import QueryService
 from services.telegram_service import TelegramService
 from services.storage_service import StorageService
+from config import MAX_RECEIPTS_PER_USER
 
 
 setup_logging()
@@ -119,6 +120,7 @@ def get_welcome_message() -> str:
         "• Items with prices\n"
         "• Total amount\n\n"
         "💾 Your receipts are automatically stored and you'll get a unique ID for each one.\n\n"
+        f"📊 *Storage Limit:* {MAX_RECEIPTS_PER_USER} receipts per user\n"
         "📊 *Ask me questions like:*\n"
         "• \"How much did I spend on food in August?\"\n"
         "• \"Which store has the cheapest milk?\"\n"

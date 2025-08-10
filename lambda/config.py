@@ -28,6 +28,8 @@ MAX_MESSAGE_LENGTH = 4000
 MAX_ITEMS_DISPLAY = 10
 MAX_ITEM_NAME_LENGTH = 20
 
+MAX_RECEIPTS_PER_USER = 100
+
 # AWS Clients (singleton pattern)
 _bedrock_client = None
 _s3_client = None

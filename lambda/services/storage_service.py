@@ -209,6 +209,28 @@ class StorageService:
             logger.error(f"Delete all receipts error: {e}")
             return 0
 
+    def count_user_receipts(self, user_id: str) -> int:
+        """Count total receipts for a user"""
+        try:
+            if not self.table_name:
+                logger.error("DynamoDB table name not configured")
+                return 0
+
+            receipts = self.receipt_storage.query(
+                table=self.table_name,
+                key_condition={
+                    'partition_key': {'name': 'user_id', 'value': user_id}
+                }
+            )
+
+            count = len(receipts)
+            logger.info(f"User {user_id} has {count} receipts")
+            return count
+
+        except Exception as e:
+            logger.error(f"Count user receipts error: {e}")
+            return 0
+
     def _delete_receipt_image(self, image_url: str) -> bool:
         """Delete receipt image using storage provider abstraction"""
         try:
