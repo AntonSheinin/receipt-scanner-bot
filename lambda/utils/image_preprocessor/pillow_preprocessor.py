@@ -18,12 +18,13 @@ class ProcessingMode(Enum):
     FAST = "fast"
     BALANCED = "balanced"
     QUALITY = "quality"
+    CUSTOM = "custom"
 
 
 @dataclass
 class EnhancementConfig:
     """Configuration for image enhancement"""
-    mode: ProcessingMode = ProcessingMode.QUALITY
+    mode: ProcessingMode = ProcessingMode.FAST
     target_width: int = 2400
     contrast_factor: float = 1.5 # between 1.5–2.5 depending on OCR results
     brightness_factor: float = 1.1
@@ -69,15 +70,17 @@ class ImagePreprocessorPillow:
             # Resize for optimal OCR
             img = self._resize_for_ocr(img)
 
-            # Convert to RGB if necessary (some enhancements need it)
-            if img.mode not in ('RGB', 'L'):
-                img = img.convert('RGB')
+            # # Convert to RGB if necessary (some enhancements need it)
+            # if img.mode not in ('RGB', 'L'):
+            #     img = img.convert('RGB')
 
             # Apply enhancements based on mode
             if self.config.mode == ProcessingMode.FAST:
                 img = self._fast_enhancement(img)
             elif self.config.mode == ProcessingMode.BALANCED:
                 img = self._balanced_enhancement(img)
+            elif self.config.mode == ProcessingMode.CUSTOM:
+                img = self._custom_enhancement(img)
             else:  # QUALITY
                 img = self._quality_enhancement(img)
 
@@ -207,3 +210,9 @@ class ImagePreprocessorPillow:
             logger.warning(f"Sharpening failed: {e}")
             return img
 
+    def _custom_enhancement(self, img: Image.Image) -> Image.Image:
+        """Custom mode: User-defined enhancements"""
+        img = img.ImageOps.grayscale(img)
+        img = img.ImageOps.autocontrast(img, cutoff=2)
+
+        return img

@@ -1,9 +1,9 @@
 from typing import Dict, Optional
 import logging
+import json
 from config import setup_logging
 from provider_factory import ProviderFactory
 from utils.llm.prompts import PromptManager
-from utils.llm.parsers import ResponseParser
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -12,7 +12,6 @@ class LLMService:
     def __init__(self, provider_name: str):
         self.provider = ProviderFactory.create_llm_provider(provider_name)
         self.prompt_manager = PromptManager()
-        self.parser = ResponseParser()
 
     def analyze_receipt(self, image_data: bytes) -> Optional[Dict]:
         """Analyze receipt image"""
@@ -24,7 +23,7 @@ class LLMService:
 
         logger.info(f"LLM response: {response.content if response else 'No response'}")
 
-        return self.parser.parse_json_response(response.content) if response else None
+        return self.parse_json_response(response.content) if response else None
 
     def generate_query_plan(self, question: str) -> Optional[Dict]:
         """Generate query plan from natural language"""
@@ -36,7 +35,7 @@ class LLMService:
 
         logger.info(f"LLM query plan response: {response.content if response else 'No response'}")
 
-        return self.parser.parse_json_response(response.content) if response else None
+        return self.parse_json_response(response.content) if response else None
 
     def generate_response(self, question: str, results: Dict) -> Optional[str]:
         """Generate human-readable response"""
@@ -52,39 +51,57 @@ class LLMService:
 
     def structure_ocr_text(self, ocr_text: str) -> Optional[Dict]:
         """Structure OCR-extracted text using LLM"""
-        prompt = f"""You are provided with OCR-extracted text from a receipt. Structure this text into JSON format.
 
-OCR Text:
-{ocr_text}
+        logger.info("Structuring OCR text with LLM")
 
-Extract the following information in valid JSON format ONLY:
-
-{{
-    "store_name": "name of the store/business",
-    "date": "date in YYYY-MM-DD format",
-    "receipt_number": "receipt/transaction number if available",
-    "payment_method": "cash|credit_card|other",
-    "items": [
-        {{
-            "name": "item name",
-            "price": "item price as decimal number",
-            "quantity": "quantity as integer",
-            "category": "food/beverages/household/electronics/clothing/pharmacy/other"
-        }}
-    ],
-    "total": "total amount as decimal number"
-}}
-
-Rules:
-- Return ONLY the JSON object, no markdown formatting
-- Use null for missing information
-- Preserve Hebrew/non-Latin characters properly
-- Ensure prices are valid decimal numbers
-- Detect payment method from text indicators like CASH, CARD, CREDIT, מזומן, אשראי
-- Categorize items based on their names and context"""
-
+        prompt = self.prompt_manager.get_structure_ocr_text_prompt(ocr_text)
         response = self.provider.generate_text(prompt)
 
         logger.info(f"LLM structured OCR response: {response.content if response else 'No response'}")
 
-        return self.parser.parse_json_response(response.content) if response else None
+        return self.parse_json_response(response.content) if response else None
+
+    @staticmethod
+    def parse_json_response(content: str) -> Optional[Dict]:
+        """Parse JSON response from LLM"""
+        try:
+            # First, try to parse as-is
+            if content.strip().startswith('{'):
+                return json.loads(content.strip())
+
+            # Clean markdown JSON blocks
+            if '```json' in content:
+                start = content.find('```json') + 7
+                end = content.find('```', start)
+                if end != -1:
+                    json_content = content[start:end].strip()
+                    return json.loads(json_content)
+
+            # Look for JSON object in the text
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                json_content = json_match.group(0)
+                return json.loads(json_content)
+
+            # If all else fails, try to find the last JSON-like structure
+            lines = content.split('\n')
+            json_lines = []
+            in_json = False
+
+            for line in lines:
+                if line.strip().startswith('{'):
+                    in_json = True
+                    json_lines = [line]
+                elif in_json:
+                    json_lines.append(line)
+                    if line.strip().endswith('}') and line.strip().count('}') >= line.strip().count('{'):
+                        break
+
+            if json_lines:
+                json_content = '\n'.join(json_lines)
+                return json.loads(json_content)
+
+            return None
+
+        except json.JSONDecodeError:
+            return None

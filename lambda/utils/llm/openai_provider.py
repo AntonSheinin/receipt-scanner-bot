@@ -29,8 +29,8 @@ class OpenAIProvider(LLMProvider):
                 messages=[
                     {"role": "user", "content": prompt}
                 ],
-                max_tokens=max_tokens,
-                temperature=0.1
+                max_completion_tokens=max_tokens,
+                # temperature=0.1
             )
 
             if response.choices and response.choices[0].message.content:
@@ -71,8 +71,8 @@ class OpenAIProvider(LLMProvider):
                         ]
                     }
                 ],
-                max_tokens=max_tokens,
-                temperature=0.1
+                max_completion_tokens=max_tokens,
+                # temperature=0.1
             )
 
             if response.choices and response.choices[0].message.content:
