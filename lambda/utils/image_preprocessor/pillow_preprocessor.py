@@ -212,7 +212,7 @@ class ImagePreprocessorPillow:
 
     def _custom_enhancement(self, img: Image.Image) -> Image.Image:
         """Custom mode: User-defined enhancements"""
-        img = img.ImageOps.grayscale(img)
-        img = img.ImageOps.autocontrast(img, cutoff=2)
+        img = ImageOps.grayscale(img)
+        img = ImageOps.autocontrast(img, cutoff=2)
 
         return img

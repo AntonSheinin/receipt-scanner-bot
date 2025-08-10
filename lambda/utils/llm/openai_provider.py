@@ -16,7 +16,7 @@ class OpenAIProvider(LLMProvider):
             raise ValueError("OPENAI_API_KEY environment variable is required")
 
         self.client = OpenAI(api_key=api_key)
-        self.model_id = os.getenv('OPENAI_MODEL_ID', 'gpt-4o')  # Default to GPT-4o for vision
+        self.model_id = os.getenv('OPENAI_MODEL_ID', '')
 
     def generate_text(self, prompt: str, max_tokens: int = 3000) -> Optional[LLMResponse]:
         """Generate text response from prompt"""

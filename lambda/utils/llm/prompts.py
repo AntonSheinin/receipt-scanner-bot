@@ -3,22 +3,47 @@ from typing import Dict
 import json
 
 class PromptManager:
-    @staticmethod
-    def get_receipt_analysis_prompt() -> str:
+    def __init__(self, locale: str = "he_IL"):
+        self.locale = locale
+
+    def get_receipt_analysis_prompt(self) -> str:
         """
         Generate the prompt for receipt analysis using LLM.
+        Enhanced for Israeli/Hebrew receipts.
         """
-        return """Analyze this receipt image carefully and extract structured data. Think through the analysis step-by-step internally:
+        if self.locale == "he_IL":
+            return self.get_hebrew_receipt_analysis_prompt()
+        else:
+            raise ValueError(f"Unsupported locale: {self.locale}")
 
-- First examine the overall layout and identify languages used
+    def get_structure_ocr_text_prompt(self, ocr_text: str) -> str:
+        """
+        Generate the prompt for structuring OCR text using LLM.
+        Enhanced for Israeli/Hebrew receipts.
+        """
+        if self.locale == "he_IL":
+            return self.get_hebrew_structure_ocr_text_prompt(ocr_text)
+        else:
+            raise ValueError(f"Unsupported locale: {self.locale}")
+
+    @staticmethod
+    def get_hebrew_receipt_analysis_prompt() -> str:
+        """
+        Generate the prompt for receipt analysis using LLM.
+        Enhanced for Israeli/Hebrew receipts.
+        """
+        return """Analyze this ISRAELI receipt image (קבלה or חשבונית מס) carefully and extract structured data. Think through the analysis step-by-step internally:
+
+- First examine the overall layout - Israeli receipts typically have Hebrew text right-to-left
 - Locate and read all text sections methodically
-- Identify item names, prices, quantities, and categories
-- Look for discount/promotion rows (usually with negative values or marked with הנחה, discount, -, etc.)
-- Ignore rightmost columns that contain product codes, SKUs, or item numbers
-- Look for payment method indicators (CASH, CARD, CREDIT, VISA, MASTERCARD, מזומן, אשראי etc.)
-- Validate that extracted prices are reasonable and properly formatted
-- Cross-reference individual items with the total amount
-- Preserve Hebrew/non-Latin text properly without escaping to Unicode
+- Identify item names (שם פריט), prices (מחיר), quantities (כמות), and categories
+- Look for discount/promotion rows marked with: הנחה, מבצע, discount, -, or negative values
+- Ignore rightmost columns that contain product codes (ברקוד), SKUs (מק"ט), or item numbers
+- Look for payment method indicators: מזומן, אשראי, CASH, CARD, CREDIT, VISA, MASTERCARD, ויזה, מאסטרקארד, ישראכרט
+- Common Israeli chains: רמי לוי, שופרסל, ויקטורי, עושר עד, יינות ביתן, טיב טעם, AM:PM, סופר פארם etc.
+- Validate that extracted prices are reasonable and properly formatted (₪ symbol may appear)
+- Cross-reference individual items with the total amount (סה"כ, סיכום, total)
+- Preserve Hebrew text properly without escaping to Unicode
 
 Extract the following information in valid JSON format ONLY (no additional text or explanations):
 
@@ -39,37 +64,56 @@ Extract the following information in valid JSON format ONLY (no additional text 
     "total": "total amount as decimal number"
 }
 
-Discount handling rules:
-- ALWAYS include the "discount" field for every item
-- If a discount row appears (typically with negative price or marked as הנחה/discount), associate it with the item above it
-- All rows with negative prices should be treated as discounts, it's important to associate them correctly
-- Store the discount as it appears on the receipt with negative value
-- The item's "price" should be the ORIGINAL price as it appears on the receipt (before discount)
-- If no discount exists for an item, set "discount": 0
-- If discount cannot be clearly associated with a specific item, set "discount": 0
+Israeli Receipt Specific Rules:
+- Hebrew text reading: right-to-left
+- Common discount terms: הנחה, מבצע, הנחת כמות, הנחת חבר מועדון
+- VAT/Tax line (מע"מ): This is NOT an item, skip it
+- Deposit lines (פיקדון): Include as separate items with "deposit" category
+- Common quantity abbreviations: יח' (units), ק"ג (kg), גרם (grams), ליטר (liter)
+- Store loyalty cards: מועדון, חבר מועדון, כרטיס אשראי מועדון
+- Receipt types: חשבונית מס (tax invoice), קבלה (receipt), חשבונית מס קבלה
+
+CRITICAL ITEM PARSING RULE:
+- Lines starting with a number (product code/barcode) mark the START of a new item
+- All following lines WITHOUT a leading number belong to that item:
+  * Weight/quantity measurements (e.g., "0.724" = actual weight in kg)
+  * Price calculations (e.g., "36.13" = total price)
+  * Discount amounts (הנחה, negative values)
+- Example pattern:
+  * "4043041000457 חזה עוף נקניק רודוס 49.90" → Item with unit price 49.90/kg
+  * "0.724" → Actual weight purchased
+  * "36.13" → Calculated price (0.724 × 49.90)
+  * Extract: name="חזה עוף נקניק רודוס", price=49.90, quantity=0.724
+  * System will calculate: 49.90 × 0.724 = 36.13
 
 Column identification rules:
-- Focus on columns containing: item names/descriptions, quantities, and prices
+- Focus on columns containing: item names/descriptions, quantities, prices and discounts
 - IGNORE columns that appear to contain:
-  * Product codes (numeric sequences like 7290000123456)
-  * SKUs or barcodes
-  * Department codes
-  * Item reference numbers
-- These code columns are typically on the far right of receipts
+  * Product codes (ברקוד) - numeric sequences like 7290000123456
+  * SKUs (מק"ט) or barcodes
+  * Department codes (קוד מחלקה)
+  * Item reference numbers (מספר פריט, מספר מוצר, קוד מוצר)
+- These code columns are typically on the far right of receipts or in the middle columns
+
+Discount handling rules:
+- ALWAYS include the "discount" field for every item
+- Israeli receipts often show: הנחה, הנחת מבצע, or negative amounts below items
+- All rows with negative prices should be treated as discounts
+- Store the discount as it appears on receipt with negative value
+- The item's "price" should be the ORIGINAL price as shown (before discount)
+- If no discount exists for an item, set "discount": 0
 
 Payment method detection rules:
-- Look for text indicators like: CASH, CARD, CREDIT, VISA, MASTERCARD, מזומן, אשראי etc.
-- "cash" for cash payments or text containing "CASH", "מזומן"
-- "credit_card" for card payments or text containing "CARD", "CREDIT", "VISA", "MASTERCARD", "כרטיס", "אשראי"
-- "other" for any other payment method
+- "cash" for: מזומן, CASH, מזומנים
+- "credit_card" for: אשראי, כרטיס אשראי, CREDIT, VISA, ויזה, מאסטרקארד, ישראכרט, MASTERCARD, אמקס, American Express
+- "other" for: שיק (check), העברה בנקאית (bank transfer), ביט (Bit app)
 - Use null if payment method cannot be determined
 
 Important:
-- Return ONLY the JSON object, no markdown formatting or explanations
-- If information is not clearly visible, use null
-- Ensure all prices are valid decimal numbers
-- Preserve Hebrew and special characters correctly
-- Categorize items accurately based on context and name
+- Return ONLY the JSON object, no markdown formatting or explanations or comments
+- Israeli phone numbers format: 03-1234567, 052-1234567
+- Israeli dates may appear as: DD/MM/YYYY or DD.MM.YYYY
+- Prices may include ₪ symbol or ש"ח abbreviation
 - The "discount" field is MANDATORY for all items (use 0 if no discount)
 - Item prices should reflect the original price shown on receipt, not the discounted price
 - Validate that sum of (price * quantity + discount) for all items equals the total"""
@@ -123,8 +167,8 @@ Generate a helpful, conversational response for Telegram. Requirements:
 Format for Telegram with **bold** text and emojis. Keep it concise but informative."""
 
     @staticmethod
-    def get_structure_ocr_text_prompt(ocr_text: str) -> str:
-        return f"""You are provided with OCR-extracted text from a receipt. Structure this text into JSON format.
+    def get_hebrew_structure_ocr_text_prompt(ocr_text: str) -> str:
+        return f"""You are provided with OCR-extracted text from an ISRAELI receipt (קבלה). Structure this text into JSON format.
 
 OCR Text:
 {ocr_text}
@@ -148,9 +192,30 @@ Extract the following information in valid JSON format ONLY:
     "total": "total amount as decimal number"
 }}
 
+Israeli Receipt Specific Patterns:
+- Store names: רמי לוי, שופרסל, ויקטורי, עושר עד, יינות ביתן, טיב טעם, AM:PM, סופר פארם etc.
+- Total indicators: סה"כ, סיכום, סך הכל, לתשלום, TOTAL
+- VAT/Tax (מע"מ): Skip this line - it's not an item
+- Deposit (פיקדון): Include as separate item with "deposit" category
+- Quantity units: יח', ק"ג, גרם, ליטר, מ"ל
+- Date formats: DD/MM/YYYY, DD.MM.YYYY, DD-MM-YYYY
+
+CRITICAL ITEM PARSING RULE:
+- Lines starting with a number (product code/barcode) mark the START of a new item
+- All following lines WITHOUT a leading number belong to that item:
+  * Weight/quantity measurements (e.g., "0.724" = actual weight in kg)
+  * Price calculations (e.g., "36.13" = total price)
+  * Discount amounts (הנחה, negative values)
+- Example pattern:
+  * "4043041000457 חזה עוף נקניק רודוס 49.90" → Item with unit price 49.90/kg
+  * "0.724" → Actual weight purchased
+  * "36.13" → Calculated price (0.724 × 49.90)
+  * Extract: name="חזה עוף נקניק רודוס", price=49.90, quantity=0.724
+  * System will calculate: 49.90 × 0.724 = 36.13
+
 Discount handling rules:
 - ALWAYS include the "discount" field for every item
-- Look for discount lines (marked as הנחה, discount, or showing negative values)
+- Look for discount lines: הנחה, הנחת מבצע, מבצע, הנחת כמות, הנחת חבר מועדון, discount, - (negative values)
 - When a discount line appears, associate it with the item directly above it
 - Store discounts as NEGATIVE numbers (e.g., -5.50 for a 5.50 discount)
 - The "price" field should show the ORIGINAL price before any discount
@@ -159,8 +224,16 @@ Discount handling rules:
 
 Column/Text identification rules:
 - Focus on item names, quantities, and prices
-- Ignore product codes, SKUs, barcodes (usually long numeric sequences)
-- These codes typically appear at the most right side of receipt text
+- IGNORE product codes, SKUs (מק"ט), barcodes (ברקוד) - usually long numeric sequences
+- Israeli barcodes often start with 729
+- These codes typically appear at the rightmost side of receipt text
+- Skip lines with only numbers like: 7290000123456, 12345678
+
+Payment method detection rules:
+- "cash" for: מזומן, CASH, מזומנים, נתקבל מזומן
+- "credit_card" for: אשראי, כרטיס אשראי, כ.אשראי, CREDIT, VISA, ויזה, מאסטרקארד, ישראכרט, MASTERCARD, אמריקן אקספרס
+- "other" for: שיק, המחאה, העברה בנקאית, ביט (Bit), פייבוקס (PayBox), פייפאל (PayPal)
+- Use null if payment method cannot be determined
 
 Rules:
 - Return ONLY the JSON object, no markdown formatting, no explanations, no additional text
@@ -169,5 +242,7 @@ Rules:
 - Ensure prices are valid decimal numbers
 - The "discount" field is MANDATORY for all items (use 0 if no discount)
 - Item prices should be the original price from receipt, not discounted price
-- Detect payment method from text indicators like CASH, CARD, CREDIT, מזומן, אשראי
-- Categorize items based on their names and context"""
+- Categorize items based on their names and context
+- Hebrew text may appear reversed or broken in OCR - try to reconstruct meaningful item names
+- Remove any Unicode escape sequences (\\u05xx) - use actual Hebrew characters
+- Validate that sum of (price * quantity + discount) for all items approximates the total"""

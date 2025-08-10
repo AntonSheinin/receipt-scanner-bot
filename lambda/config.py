@@ -25,8 +25,8 @@ DOCUMENT_PROCESSING_MODE = os.environ.get('DOCUMENT_PROCESSING_MODE')
 
 # Message limits
 MAX_MESSAGE_LENGTH = 4000
-MAX_ITEMS_DISPLAY = 15
-MAX_ITEM_NAME_LENGTH = 30
+MAX_ITEMS_DISPLAY = 10
+MAX_ITEM_NAME_LENGTH = 20
 
 # AWS Clients (singleton pattern)
 _bedrock_client = None
