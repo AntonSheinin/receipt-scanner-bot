@@ -1,3 +1,6 @@
+# Copyright (c) 2025 Anton Sheinin - All rights reserved.
+# Unauthorized use is prohibited. See LICENSE file for details.
+
 """
 Receipt Scanner Bot MVP - CDK App Entry Point
 """
