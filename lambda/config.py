@@ -14,6 +14,8 @@ S3_BUCKET_NAME = os.environ.get('S3_BUCKET_NAME')
 DYNAMODB_TABLE_NAME = os.environ.get('DYNAMODB_TABLE_NAME')
 BEDROCK_REGION = os.environ.get('BEDROCK_REGION')
 
+USER_ID_SALT = os.environ.get('USER_ID_SALT', 'receipt-scanner-bot-default-salt-change-in-production')
+
 LLM_PROVIDER = os.environ.get('LLM_PROVIDER')
 
 # OCR Configuration

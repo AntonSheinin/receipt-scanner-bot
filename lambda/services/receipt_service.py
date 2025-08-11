@@ -10,6 +10,7 @@ from services.storage_service import StorageService
 from services.document_processor_service import DocumentProcessorService
 from utils.helpers import create_response
 from config import MAX_ITEMS_DISPLAY, MAX_ITEM_NAME_LENGTH, setup_logging, MAX_RECEIPTS_PER_USER
+from utils.helpers import get_secure_user_id
 
 
 setup_logging()
@@ -27,14 +28,14 @@ class ReceiptService:
         """Process receipt photo end-to-end with limit checking"""
 
         self.telegram.send_typing(chat_id)
-        user_id = str(chat_id)
+        secure_user_id = get_secure_user_id(chat_id)
 
         # Check receipt limit BEFORE any processing
-        logger.info(f"Checking receipt limit for user: {user_id}")
-        current_count = self.storage.count_user_receipts(user_id)
+        logger.info(f"Checking receipt limit for user: {chat_id}")
+        current_count = self.storage.count_user_receipts(secure_user_id)
 
         if current_count >= MAX_RECEIPTS_PER_USER:
-            logger.warning(f"User {user_id} hit receipt limit: {current_count}/{MAX_RECEIPTS_PER_USER}")
+            logger.warning(f"User {chat_id} hit receipt limit: {current_count}/{MAX_RECEIPTS_PER_USER}")
             return self.telegram.send_error(
                 chat_id,
                 f"🚫 הגעת למגבלת הקבלות ({MAX_RECEIPTS_PER_USER} קבלות).\n\n"
@@ -51,7 +52,7 @@ class ReceiptService:
         receipt_id = str(uuid.uuid4())
 
         # Store image
-        logger.info(f"Storing receipt image with ID: {receipt_id} for user: {user_id}")
+        logger.info(f"Storing receipt image with ID: {receipt_id} for user: {chat_id}")
         self.telegram.send_message(chat_id, "📁 שומר את התמונה...")
         image_url = self.storage.store_raw_image(receipt_id, photo_data)
         if not image_url:
@@ -68,7 +69,7 @@ class ReceiptService:
         try:
             # Store data and respond
             logger.info(f"Storing receipt data for ID: {receipt_id}")
-            self.storage.store_receipt_data(receipt_id, user_id, receipt_data, image_url)
+            self.storage.store_receipt_data(receipt_id, secure_user_id, receipt_data, image_url)
             response_text = self._format_receipt_response(receipt_data, receipt_id)
             self.telegram.send_message(chat_id, response_text, parse_mode=None)
 

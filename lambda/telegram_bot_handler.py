@@ -11,6 +11,7 @@ from services.query_service import QueryService
 from services.telegram_service import TelegramService
 from services.storage_service import StorageService
 from config import MAX_RECEIPTS_PER_USER
+from utils.helpers import get_secure_user_id
 
 
 setup_logging()
@@ -85,56 +86,55 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Optional[Dict[str, An
     elif 'photo' in message:
         logger.info("Processing receipt photo")
         telegram_service.send_typing(chat_id)
-        telegram_service.send_message(chat_id, "📸 Processing your receipt... Please wait.")
+        telegram_service.send_message(chat_id, "📸 מעבדים את הקבלה... נא להמתין")
 
         try:
             receipt_service.process_receipt(message, chat_id)
 
         except Exception as e:
             logger.error(f"Receipt processing error: {e}", exc_info=True)
-            telegram_service.send_message(chat_id, "❌ Failed to process receipt. Please try again.")
+            telegram_service.send_message(chat_id, "❌ לא הצלחנו לעבד את הקבלה. אנא נסה שוב.")
 
     elif 'text' in message:
         logger.info("Processing query message")
         telegram_service.send_typing(chat_id)
-        telegram_service.send_message(chat_id, "🔍 Processing your query... Please wait.")
+        telegram_service.send_message(chat_id, "🔍 מעבדים את שאלתך... נא להמתין.")
 
         try:
-            query_service.process_query(text, str(chat_id))
+            query_service.process_query(text, chat_id)
 
         except Exception as e:
             logger.error(f"Query processing error: {e}", exc_info=True)
-            telegram_service.send_message(chat_id, "❌ Failed to process your query. Please try again.")
+            telegram_service.send_message(chat_id, "❌ לא הצלחנו לעבד את השאלתך. אנא נסה שוב.")
 
         return create_response(200, {"status": "processing"})
 
 def get_welcome_message() -> str:
     """Get welcome message for bot"""
     return (
-        "🧾 *Receipt Scanner Bot*\n\n"
-        "Send me a photo of your receipt and I'll extract the structured data!\n\n"
-        "I can recognize:\n"
-        "• Store name\n"
-        "• Date\n"
-        "• Receipt number\n"
-        "• Items with prices\n"
-        "• Total amount\n\n"
-        "💾 Your receipts are automatically stored and you'll get a unique ID for each one.\n\n"
-        f"📊 *Storage Limit:* {MAX_RECEIPTS_PER_USER} receipts per user\n"
-        "📊 *Ask me questions like:*\n"
-        "• \"How much did I spend on food in August?\"\n"
-        "• \"Which store has the cheapest milk?\"\n"
-        "• \"Show me all receipts from Rami Levy\"\n"
-        "• \"How many times did I shop last month?\"\n\n"
-        "🤖 *Available Commands:*\n"
-        "• /start - Show this welcome message\n"
-        "• /help - Show this help information\n"
-        "• /delete_last - Delete your most recent receipt\n"
-        "• /delete_all - Delete all your receipts\n\n"
-        "💡 *Tip:* Type '/' to see all available commands in the menu!\n\n"
-        "Just send a clear photo of your receipt! 📸"
-    )
-
+    "🧾 בוט סורק קבלות \n\n"
+    "שלח לי תמונה של הקבלה ואני אחלץ את המידע המובנה!\n\n"
+    "אני יכול לזהות:\n"
+    "• שם החנות\n"
+    "• תאריך\n"
+    "• מספר קבלה\n"
+    "• פריטים עם מחירים\n"
+    "• סכום כולל\n\n"
+    "💾 הקבלות שלך נשמרות במאגר ללא מידע אישי .\n\n"
+    f"📊 מגבלת אחסון: {MAX_RECEIPTS_PER_USER} קבלות לכל משתמש\n"
+    "📊 שאל אותי שאלות כמו:\n"
+    "• \"כמה הוצאתי על אוכל באוגוסט?\"\n"
+    "• \"איזו חנות הכי זולה לחלב?\"\n"
+    "• \"הראה לי את כל הקבלות מרמי לוי\"\n"
+    "• \"כמה פעמים קניתי בחודש שעבר?\"\n\n"
+    "🤖 פקודות זמינות:\n"
+    "• /start - הצג הודעת ברוכים הבאים\n"
+    "• /help - הצג מידע עזרה\n"
+    "• /delete_last - מחק את הקבלה האחרונה שלך\n"
+    "• /delete_all - מחק את כל הקבלות שלך\n\n"
+    "💡 טיפ: הקלד '/' כדי לראות את כל הפקודות הזמינות בתפריט!\n\n"
+    "פשוט שלח תמונה ברורה של הקבלה שלך! 📸"
+)
 def create_response(status_code: int, body: Dict[str, Any]) -> Dict[str, Any]:
     """Create Lambda response in API Gateway format"""
     return {
@@ -150,9 +150,10 @@ def handle_delete_last_command(chat_id: int) -> Dict:
     """Handle /delete_last command - delete last UPLOADED receipt"""
 
     telegram_service.send_typing(chat_id)
+    secure_user_id = get_secure_user_id(chat_id)
 
     # Make sure we delete by upload date (created_at), not receipt date
-    deleted_receipt = storage_service.delete_last_uploaded_receipt(str(chat_id))
+    deleted_receipt = storage_service.delete_last_uploaded_receipt(secure_user_id)
 
     if deleted_receipt:
         store_name = deleted_receipt.get('store_name', 'Unknown Store')
@@ -161,19 +162,19 @@ def handle_delete_last_command(chat_id: int) -> Dict:
         total = deleted_receipt.get('total', '0.00')
 
         message = (
-            "🗑️ *Last Uploaded Receipt Deleted*\n\n"
-            f"🏪 Store: {store_name}\n"
-            f"📅 Receipt Date: {receipt_date}\n"
-            f"📤 Uploaded: {upload_date[:10]}\n"  # Show just date part
-            f"💰 Total: ${total}\n"
-            f"🆔 Receipt ID: `{deleted_receipt['receipt_id']}`"
+            "🗑️ הקבלה האחרונה נמחקה בהצלחה\n\n"
+            f"🏪 חנות: {store_name}\n"
+            f"📅 תאריך קבלה: {receipt_date}\n"
+            f"📤 תאריך העלאה: {upload_date[:10]}\n"  # Show just date part
+            f"💰 סך הכל: {total} שח \n"
+            f"🆔 מזהה קבלה: `{deleted_receipt['receipt_id']}`"
         )
 
         logger.info(f"Deleted last uploaded receipt {deleted_receipt['receipt_id']}")
 
     else:
         logger.info("No receipts found to delete")
-        message = "❌ No receipts found to delete. Upload some receipts first!"
+        message = "❌ לא נמצאו קבלות למחיקה. אין קבלות שמורות כרגע."
 
     telegram_service.send_message(chat_id, message)
     return create_response(200, {"status": "delete_last_command_handled"})
@@ -182,21 +183,22 @@ def handle_delete_all_command(chat_id: int) -> Dict:
     """Handle /delete-all command"""
 
     telegram_service.send_typing(chat_id)
-    telegram_service.send_message(chat_id, "🗑️ Deleting all receipts... Please wait.")
+    telegram_service.send_message(chat_id, "🗑️ מוחקים את כל הקבלות... נא להמתין.")
 
-    deleted_count = storage_service.delete_all_receipts(str(chat_id))
+    secure_user_id = get_secure_user_id(chat_id)
+    deleted_count = storage_service.delete_all_receipts(secure_user_id)
 
     if deleted_count > 0:
         message = (
-            "🗑️ *All Receipts Deleted Successfully*\n\n"
-            f"📊 Total deleted: {deleted_count} receipts\n"
-            "💾 All associated images have been removed from storage"
+            "🗑️ כל הקבלות נמחקו בהצלחה\n\n"
+            f"📊 סך הכל נמחקו: {deleted_count} קבלות\n"
+            "💾 כל התמונות הקשורות הוסרו מהאחסון"
         )
 
         logger.info(f"Deleted {deleted_count} receipts")
 
     else:
-        message = "❌ No receipts found to delete. Your storage is already empty!"
+        message = "❌ לא נמצאו קבלות למחיקה. אין קבלות שמורות כרגע."
         logger.info("No receipts found to delete")
 
     telegram_service.send_message(chat_id, message)

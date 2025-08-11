@@ -5,7 +5,14 @@
 import json
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Optional, Union
+import uuid
+from config import USER_ID_SALT
+import logging
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def convert_floats_to_decimals(obj: Any) -> Any:
     """
@@ -83,3 +90,36 @@ def create_response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
         "headers": {"Content-Type": "application/json"},
         "body": json.dumps(body)
     }
+
+def get_secure_user_id(telegram_user_id: Union[str, int]) -> str:
+    """
+    Generate secure, deterministic user ID using UUID5
+
+    Args:
+        telegram_user_id: Original Telegram user/chat ID (int or str)
+
+    Returns:
+        Secure UUID-based ID (32 characters hex, collision-resistant)
+        Same input always produces same output for queryability
+    """
+    try:
+        # Normalize input to string
+        user_str = str(telegram_user_id).strip()
+
+        if not user_str:
+            raise ValueError("Empty user ID provided")
+
+        # Create namespace UUID from salt (deterministic)
+        namespace = uuid.uuid5(uuid.NAMESPACE_DNS, USER_ID_SALT)
+
+        # Generate deterministic UUID5 based on user_id
+        secure_uuid = uuid.uuid5(namespace, user_str)
+
+        # Return as hex string (32 characters, no hyphens)
+        return secure_uuid.hex
+
+    except Exception as e:
+        logger.error(f"Error generating secure user ID: {e}")
+        # Fallback to original (not recommended for production)
+        logger.warning("Falling back to original user ID - CHECK USER_ID_SALT configuration!")
+        return str(telegram_user_id)

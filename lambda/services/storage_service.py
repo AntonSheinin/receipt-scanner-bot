@@ -37,7 +37,7 @@ class StorageService:
             logger.error(f"Image storage error: {e}")
             return None
 
-    def store_receipt_data(self, receipt_id: str, user_id: str, receipt_data: Dict,
+    def store_receipt_data(self, receipt_id: str, secure_user_id: str, receipt_data: Dict,
                           image_url: str, metadata: Optional[Dict] = None) -> bool:
         """Store receipt data using DocumentStorage provider"""
         try:
@@ -48,7 +48,7 @@ class StorageService:
             # Check if receipt already exists
             existing = self.receipt_storage.get(
                 table=self.table_name,
-                key={'user_id': user_id, 'receipt_id': receipt_id}
+                key={'user_id': secure_user_id, 'receipt_id': receipt_id}
             )
 
             if existing:
@@ -57,7 +57,7 @@ class StorageService:
 
             # Prepare item
             item = {
-                'user_id': user_id,
+                'user_id': secure_user_id,
                 'receipt_id': receipt_id,
                 'created_at': datetime.now(timezone.utc).isoformat(),
                 'image_url': image_url,
@@ -87,7 +87,7 @@ class StorageService:
             logger.error(f"Receipt data storage error: {e}")
             return False
 
-    def get_filtered_receipts(self, query_plan: Dict, user_id: str) -> List[Dict]:
+    def get_filtered_receipts(self, query_plan: Dict, secure_user_id: str) -> List[Dict]:
         """Get filtered receipts using DocumentStorage provider"""
         try:
             if not self.table_name:
@@ -99,26 +99,26 @@ class StorageService:
 
             # Check if we can use an index for efficient querying
             if "payment_methods" in filter_params and filter_params["payment_methods"]:
-                receipts = self._query_by_payment_methods(user_id, filter_params["payment_methods"])
+                receipts = self._query_by_payment_methods(secure_user_id, filter_params["payment_methods"])
             elif "date_range" in filter_params:
-                receipts = self._query_by_date_range(user_id, filter_params["date_range"])
+                receipts = self._query_by_date_range(secure_user_id, filter_params["date_range"])
             elif "store_names" in filter_params and filter_params["store_names"]:
-                receipts = self._query_by_store_names(user_id, filter_params["store_names"])
+                receipts = self._query_by_store_names(secure_user_id, filter_params["store_names"])
             else:
                 # Fall back to scanning all user receipts
-                receipts = self._scan_user_receipts(user_id)
+                receipts = self._scan_user_receipts(secure_user_id)
 
             # Apply additional filters
             receipts = self._apply_additional_filters(receipts, filter_params)
 
-            logger.info(f"Found {len(receipts)} receipts for user {user_id}")
+            logger.info(f"Found {len(receipts)} receipts for user {secure_user_id}")
             return receipts
 
         except Exception as e:
             logger.error(f"Query error: {e}")
             return []
 
-    def delete_last_uploaded_receipt(self, user_id: str) -> Optional[Dict]:
+    def delete_last_uploaded_receipt(self, secure_user_id: str) -> Optional[Dict]:
         """Delete the most recently uploaded receipt for a user"""
         try:
             if not self.table_name:
@@ -129,7 +129,7 @@ class StorageService:
             receipts = self.receipt_storage.query(
                 table=self.table_name,
                 key_condition={
-                    'partition_key': {'name': 'user_id', 'value': user_id}
+                    'partition_key': {'name': 'user_id', 'value': secure_user_id}
                 }
             )
 
@@ -149,7 +149,7 @@ class StorageService:
             # Delete from storage
             success = self.receipt_storage.delete(
                 table=self.table_name,
-                key={'user_id': user_id, 'receipt_id': receipt_id}
+                key={'user_id': secure_user_id, 'receipt_id': receipt_id}
             )
 
             if success:
@@ -167,7 +167,7 @@ class StorageService:
             logger.error(f"Delete last receipt error: {e}")
             return None
 
-    def delete_all_receipts(self, user_id: str) -> int:
+    def delete_all_receipts(self, secure_user_id: str) -> int:
         """Delete all receipts for a user"""
         try:
             if not self.table_name:
@@ -178,7 +178,7 @@ class StorageService:
             receipts = self.receipt_storage.query(
                 table=self.table_name,
                 key_condition={
-                    'partition_key': {'name': 'user_id', 'value': user_id}
+                    'partition_key': {'name': 'user_id', 'value': secure_user_id}
                 }
             )
 
@@ -191,7 +191,7 @@ class StorageService:
             for receipt in receipts:
                 success = self.receipt_storage.delete(
                     table=self.table_name,
-                    key={'user_id': user_id, 'receipt_id': receipt['receipt_id']}
+                    key={'user_id': secure_user_id, 'receipt_id': receipt['receipt_id']}
                 )
 
                 if success:
@@ -202,14 +202,14 @@ class StorageService:
 
                     deleted_count += 1
 
-            logger.info(f"Deleted {deleted_count} receipts for user: {user_id}")
+            logger.info(f"Deleted {deleted_count} receipts for user: {secure_user_id}")
             return deleted_count
 
         except Exception as e:
             logger.error(f"Delete all receipts error: {e}")
             return 0
 
-    def count_user_receipts(self, user_id: str) -> int:
+    def count_user_receipts(self, secure_user_id: str) -> int:
         """Count total receipts for a user"""
         try:
             if not self.table_name:
@@ -219,12 +219,12 @@ class StorageService:
             receipts = self.receipt_storage.query(
                 table=self.table_name,
                 key_condition={
-                    'partition_key': {'name': 'user_id', 'value': user_id}
+                    'partition_key': {'name': 'user_id', 'value': secure_user_id}
                 }
             )
 
             count = len(receipts)
-            logger.info(f"User {user_id} has {count} receipts")
+            logger.info(f"User {secure_user_id} has {count} receipts")
             return count
 
         except Exception as e:
@@ -268,58 +268,58 @@ class StorageService:
             logger.error(f"Storage key extraction error: {e}")
             return None
 
-    def _query_by_date_range(self, user_id: str, date_range: Dict) -> List[Dict]:
+    def _query_by_date_range(self, secure_user_id: str, date_range: Dict) -> List[Dict]:
         """Query receipts by date range using storage provider"""
         try:
             start_date = date_range.get("start")
             end_date = date_range.get("end")
 
             if not start_date or not end_date:
-                return self._scan_user_receipts(user_id)
+                return self._scan_user_receipts(secure_user_id)
 
             return self.receipt_storage.query_by_date_range(
                 table=self.table_name,
-                user_id=user_id,
+                user_id=secure_user_id,
                 start_date=start_date,
                 end_date=end_date
             )
 
         except Exception as e:
             logger.error(f"Date range query error: {e}")
-            return self._scan_user_receipts(user_id)
+            return self._scan_user_receipts(secure_user_id)
 
-    def _query_by_store_names(self, user_id: str, store_names: List[str]) -> List[Dict]:
+    def _query_by_store_names(self, secure_user_id: str, store_names: List[str]) -> List[Dict]:
         """Query receipts by store names using storage provider"""
         try:
             return self.receipt_storage.query_by_stores(
                 table=self.table_name,
-                user_id=user_id,
+                user_id=secure_user_id,
                 store_names=store_names
             )
 
         except Exception as e:
             logger.error(f"Store name query error: {e}")
-            return self._scan_user_receipts(user_id)
+            return self._scan_user_receipts(secure_user_id)
 
-    def _query_by_payment_methods(self, user_id: str, payment_methods: List[str]) -> List[Dict]:
+    def _query_by_payment_methods(self, secure_user_id: str, payment_methods: List[str]) -> List[Dict]:
         """Query receipts by payment methods using storage provider"""
         try:
             return self.receipt_storage.query_by_payment_methods(
                 table=self.table_name,
-                user_id=str(user_id),  # Ensure string
+                user_id=str(secure_user_id),  # Ensure string
                 payment_methods=payment_methods
             )
 
         except Exception as e:
             logger.error(f"Payment method query error: {e}")
-            return self._scan_user_receipts(user_id)
+            return self._scan_user_receipts(secure_user_id)
 
-    def _scan_user_receipts(self, user_id: str) -> List[Dict]:
+    def _scan_user_receipts(self, secure_user_id: str) -> List[Dict]:
         """Scan all receipts for a user using storage provider"""
         try:
             return self.receipt_storage.query_user_receipts(
                 table=self.table_name,
-                user_id=user_id
+                user_id=secure_user_id
             )
 
         except Exception as e:
