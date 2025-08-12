@@ -202,6 +202,7 @@ class DynamoDBStorageProvider(DocumentStorage):
 
     def query_user_receipts(self, table: str, user_id: str) -> List[Dict[str, Any]]:
         """Query all receipts for a user"""
+
         return self.query(
             table=table,
             key_condition={

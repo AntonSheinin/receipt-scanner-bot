@@ -126,11 +126,17 @@ Important:
 
         return f"""Analyze this user question about their stored receipts and generate a query plan.
 
+IMPORTANT: All receipts are Israeli receipts with Hebrew text. When generating item_keywords,
+ALWAYS use Hebrew keywords regardless of the question language.
+
 Current date: {current_date.strftime('%Y-%m-%d')}
 Current month: {current_month}
 Last month: {last_month}
 
 User question: "{question}"
+
+Available filter fields (only include if relevant):
+- "item_keywords": ["keyword1", "keyword2"] - MUST be in Hebrew since receipts are Hebrew
 
 Generate a JSON query plan with this structure - ONLY include fields that are actually needed:
 {{
@@ -141,7 +147,16 @@ Generate a JSON query plan with this structure - ONLY include fields that are ac
 
 [... rest of existing prompt logic ...]
 
-CRITICAL: Return ONLY the JSON object. Do not include null values or empty arrays."""
+CRITICAL: Return keywords in Hebrew characters, not Russian or English.
+
+Examples (but not all the possible Hebrew keywords):
+- For alcohol: ["אלכוהול", "משקאות חריפים", "יין", "בירה", "ויסקי", "וודקה", "ברנדי"]
+- For food: ["לחם", "חלב", "בשר", "ירקות"]
+- For household: ["סבון", "חומרי ניקוי", "נייר טואלט"]
+
+CRITICAL: Return ONLY the JSON object. Do not include null values or empty arrays.
+Don't include any explanations or comments.
+"""
 
     @staticmethod
     def get_response_generation_prompt(question: str, results: Dict) -> str:
@@ -153,7 +168,7 @@ Aggregation results: {json.dumps(results.get('results', {}), indent=2)}
 
 Total receipts found: {results.get('total_receipts', 0)}
 
-Sample receipt data for context: {json.dumps(results.get('raw_data', []), indent=2)}
+Raw receipts data for context: {json.dumps(results.get('raw_data', []), indent=2)}
 
 Generate a helpful, conversational response for Telegram. Requirements:
 1. Answer the user's question directly and clearly
@@ -246,3 +261,63 @@ Rules:
 - Hebrew text may appear reversed or broken in OCR - try to reconstruct meaningful item names
 - Remove any Unicode escape sequences (\\u05xx) - use actual Hebrew characters
 - Validate that sum of (price * quantity + discount) for all items approximates the total"""
+
+    @staticmethod
+    def get_generate_query_plan_prompt(question: str):
+        current_date = datetime.now(timezone.utc)
+        current_month = current_date.strftime('%Y-%m')
+        last_month = (current_date.replace(day=1) - timedelta(days=1)).strftime('%Y-%m')
+
+        return f"""Analyze this user question about their stored receipts and generate a query plan.
+
+Current date: {current_date.strftime('%Y-%m-%d')}
+Current month: {current_month}
+Last month: {last_month}
+
+User question: "{question}"
+
+Generate a JSON query plan with this structure - ONLY include fields that are actually needed:
+{{
+    "filter": {{}},
+    "aggregation": "count_receipts",
+    "sort_by": "upload_date_desc"
+}}
+
+Available filter fields (only include if relevant):
+- "date_range": {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}}
+- "store_names": ["store1", "store2"]
+- "item_keywords": ["keyword1", "keyword2"]
+- "categories": ["food", "beverages", "household"]
+- "price_range": {{"min": 10, "max": 100}}
+- "payment_methods": ["cash", "credit_card", "other"]
+- "limit": 1
+
+Available aggregations:
+- "sum_total" - total spending
+- "sum_by_category" - spending by category
+- "min_price_by_store" - cheapest price by store
+- "max_price_by_store" - most expensive price by store
+- "count_receipts" - count receipts (use for "show me" queries)
+
+Available sort options:
+- "upload_date_desc" - most recently uploaded first
+- "upload_date_asc" - oldest uploaded first
+- "receipt_date_desc" - most recent purchase date first
+- "receipt_date_asc" - oldest purchase date first
+- "total_desc" - highest amount first
+- "total_asc" - lowest amount first
+
+Rules:
+- For "latest/last uploaded" queries, use sort_by: "upload_date_desc"
+- For "most recent purchase" queries, use sort_by: "receipt_date_desc"
+- For "show me" or "what is" queries, use aggregation: "count_receipts"
+- DO NOT include fields with null values - omit them completely
+- DO NOT include empty arrays - omit them completely
+- Only set limit when you want to restrict results (1-10)
+
+Examples:
+"Last receipt by upload date" → {{"filter": {{"limit": 1}}, "aggregation": "count_receipts", "sort_by": "upload_date_desc"}}
+"How much did I spend on food?" → {{"filter": {{"categories": ["food"]}}, "aggregation": "sum_by_category"}}
+"Show my 3 biggest purchases" → {{"filter": {{"limit": 3}}, "aggregation": "count_receipts", "sort_by": "total_desc"}}
+
+CRITICAL: Return ONLY the JSON object. Do not include null values or empty arrays. Only include relevant fields."""
