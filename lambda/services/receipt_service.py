@@ -51,7 +51,7 @@ class ReceiptService:
 
         receipt_id = str(uuid.uuid4())
 
-        # Store image
+        # Store raw image
         logger.info(f"Storing receipt image with ID: {receipt_id} for user: {chat_id}")
         self.telegram.send_message(chat_id, "📁 שומר את התמונה...")
         image_url = self.storage.store_raw_image(receipt_id, photo_data)
@@ -60,11 +60,11 @@ class ReceiptService:
 
         # Analyze receipt using hybrid processor
         logger.info(f"Analyzing receipt with ID: {receipt_id}")
-        self.telegram.send_message(chat_id, "🔍 מנתח את הקבלה... נא להמתין.")
+        self.telegram.send_message(chat_id, "🔍 מנתח את הקבלה...")
         receipt_data = self.processor.process_receipt(photo_data)
 
         if not receipt_data:
-            return self.telegram.send_error(chat_id, "לא ניתן לעבד את הקבלה. נא לוודא שהתמונה ברורה ומכילה קבלה תקפה.")
+            return self.telegram.send_error(chat_id, "לא ניתן לעבד את הקבלה. נא לוודא שהתמונה ברורה ומכילה קבלה.")
 
         try:
             # Store data and respond
@@ -180,9 +180,9 @@ class ReceiptService:
             # Processing method indicator (if available)
             if receipt_data.get('processing_method'):
                 methods = {
-                    'llm': 'AI Vision',
-                    'ocr_llm': 'OCR + AI',
-                    'pp_ocr_llm': 'Enhanced OCR + AI'
+                    'llm': 'LLM',
+                    'ocr_llm': 'OCR + LLM',
+                    'pp_ocr_llm': 'Enhanced OCR + LLM'
                 }
                 result += f"\n\n{methods.get(receipt_data['processing_method'], '🔍')}"
 

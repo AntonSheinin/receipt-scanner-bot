@@ -5,7 +5,7 @@
 import json
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, Dict
 import uuid
 from config import USER_ID_SALT
 import logging
@@ -123,3 +123,15 @@ def get_secure_user_id(telegram_user_id: Union[str, int]) -> str:
         # Fallback to original (not recommended for production)
         logger.warning("Falling back to original user ID - CHECK USER_ID_SALT configuration!")
         return str(telegram_user_id)
+
+def create_response(status_code: int, body: Dict[str, Any]) -> Dict[str, Any]:
+    """Create Lambda response in API Gateway format"""
+    return {
+        "statusCode": status_code,
+        "headers": {
+            "Content-Type": "application/json"
+        },
+        "body": json.dumps(body),
+        "isBase64Encoded": False
+    }
+

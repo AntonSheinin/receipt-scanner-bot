@@ -53,7 +53,7 @@ class QueryService:
             # Step 2: Execute and aggregate
             results = self._execute_query(query_plan, secure_user_id)
             if not results:
-                self.telegram.send_message(chat_id, "❌ לא נמצאו נתונים תואמים. העלה קבלות קודם!")
+                self.telegram.send_message(chat_id, "❌ לא נמצאו נתונים תואמים!")
                 logger.info("No matching data found for query")
                 return create_response(200, {"status": "no_data"})
 
@@ -77,7 +77,7 @@ class QueryService:
 
         except Exception as e:
             logger.error(f"Query error: {e}", exc_info=True)
-            self.telegram.send_message(chat_id, "❌ הייתה בעיה בעיבוד השאלה שלך.")
+            self.telegram.send_message(chat_id, "❌ הייתה בעיה בעיבוד השאלתך.")
             return create_response(200, {"status": "error"})
 
     def _generate_query_plan(self, question: str) -> Optional[Dict]:
@@ -155,7 +155,7 @@ class QueryService:
                 "query": query_plan,
                 "results": result.data,
                 "result_type": result.result_type,
-                "raw_data": filtered_receipts[:3],  # Always show sample data for context
+                "raw_data": filtered_receipts[:10],  # Always send sample data for context
                 "total_receipts": len(filtered_receipts)
             }
 

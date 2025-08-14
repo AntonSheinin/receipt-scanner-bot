@@ -37,6 +37,17 @@ _bedrock_client = None
 _s3_client = None
 _dynamodb = None
 _receipts_table = None
+_sqs_client = None
+
+SQS_QUEUE_URL = os.environ.get('SQS_QUEUE_URL')
+
+
+def get_sqs_client():
+    """Get SQS client (singleton)"""
+    global _sqs_client
+    if _sqs_client is None:
+        _sqs_client = boto3.client('sqs')
+    return _sqs_client
 
 
 def get_bedrock_client():

@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from typing import Dict, Optional
 from enum import Enum
 import logging
@@ -20,6 +21,83 @@ class DocumentProcessingMode(Enum):
     OCR_LLM = "ocr_llm"
     PP_OCR_LLM = "pp_ocr_llm"
 
+# --- Strategy Interface ---
+class ReceiptProcessingStrategy(ABC):
+    @abstractmethod
+    def process(self, image_data: bytes) -> Optional[Dict]:
+        pass
+
+# --- Concrete Strategies ---
+class LLMProcessingStrategy(ReceiptProcessingStrategy):
+    def __init__(self, llm: LLMService):
+        self.llm = llm
+
+    def process(self, image_data: bytes) -> Optional[Dict]:
+        """
+        Process receipt image using LLM only.
+        """
+        logger.info("Processing receipt with LLM only")
+
+        try:
+            result = self.llm.analyze_receipt(image_data)
+            if result:
+                result['processing_method'] = 'llm'
+            return result
+
+        except Exception as e:
+            logger.error(f"LLM-only processing error: {e}")
+            return None
+
+class OCRLLMProcessingStrategy(ReceiptProcessingStrategy):
+    def __init__(self, ocr, llm: LLMService, ocr_processing_mode):
+        self.ocr = ocr
+        self.llm = llm
+        self.ocr_processing_mode = ocr_processing_mode
+
+    def process(self, image_data: bytes) -> Optional[Dict]:
+        """
+        Process receipt image using OCR then LLM.
+        """
+        logger.info("Processing receipt with OCR then LLM")
+
+        try:
+            ocr_result = self.ocr.extract_raw_text(image_data) if self.ocr_processing_mode == OCRProcessingMode.RAW_TEXT.value else self.ocr.extract_receipt_data(image_data)
+
+            if not ocr_result.success or not ocr_result.raw_text.strip():
+                logger.warning("OCR failed to extract text, falling back to LLM-only")
+                return LLMProcessingStrategy(self.llm).process(image_data)
+
+            structured_result = self.llm.structure_ocr_text(ocr_result.raw_text)
+
+            if structured_result:
+                structured_result['processing_method'] = 'ocr_llm'
+                structured_result['ocr_confidence'] = ocr_result.confidence
+                return structured_result
+
+            logger.warning("LLM structuring failed, falling back to LLM-only")
+            return LLMProcessingStrategy(self.llm).process(image_data)
+
+        except Exception as e:
+            logger.error(f"OCR+LLM processing error: {e}")
+            return LLMProcessingStrategy(self.llm).process(image_data)
+
+class PPOCRLLMProcessingStrategy(ReceiptProcessingStrategy):
+    def __init__(self, image_preprocessor, ocr, llm: LLMService, ocr_processing_mode):
+        self.image_preprocessor = image_preprocessor
+        self.ocr_llm_strategy = OCRLLMProcessingStrategy(ocr, llm, ocr_processing_mode)
+
+    def process(self, image_data: bytes) -> Optional[Dict]:
+        logger.info("Processing receipt with pre-processing OCR then LLM")
+
+        logger.info("Enhancing receipt image for better OCR accuracy")
+        image_data = self.image_preprocessor.enhance_image(image_data)
+
+        storage = StorageService()
+        storage.store_raw_image("test", image_data)
+
+        return self.ocr_llm_strategy.process(image_data)
+
+# --- Context ---
 class DocumentProcessorService:
     """Hybrid service for receipt processing using OCR and/or LLM"""
 
@@ -30,78 +108,18 @@ class DocumentProcessorService:
         self.document_processing_mode = DOCUMENT_PROCESSING_MODE
         self.ocr_processing_mode = OCR_PROCESSING_MODE
 
+        # Strategy selection
+        self.strategies = {
+            DocumentProcessingMode.LLM.value: LLMProcessingStrategy(self.llm),
+            DocumentProcessingMode.OCR_LLM.value: OCRLLMProcessingStrategy(self.ocr, self.llm, self.ocr_processing_mode),
+            DocumentProcessingMode.PP_OCR_LLM.value: PPOCRLLMProcessingStrategy(self.image_preprocessor, self.ocr, self.llm, self.ocr_processing_mode),
+        }
+
     def process_receipt(self, image_data: bytes) -> Dict:
         """Process receipt using specified mode"""
 
         logger.info(f"Processing receipt with mode: {self.document_processing_mode}")
 
-        if self.document_processing_mode == DocumentProcessingMode.LLM.value:
-            return self._process_llm(image_data)
+        strategy = self.strategies.get(self.document_processing_mode, self.strategies[DocumentProcessingMode.LLM.value])
 
-        elif self.document_processing_mode == DocumentProcessingMode.OCR_LLM.value:
-            return self._process_ocr_llm(image_data)
-
-        elif self.document_processing_mode == DocumentProcessingMode.PP_OCR_LLM.value:
-            return self._process_pp_ocr_llm(image_data)
-
-        else:
-            return self._process_llm(image_data)
-
-    def _process_llm(self, image_data: bytes) -> dict | None:
-        """Process using LLM only (existing method)"""
-
-        logger.info("Processing receipt with LLM only")
-
-        try:
-            result = self.llm.analyze_receipt(image_data)
-            if result:
-                result['processing_method'] = 'llm'
-            return result
-        except Exception as e:
-            logger.error(f"LLM-only processing error: {e}")
-            return None
-
-    def _process_ocr_llm(self, image_data: bytes) -> Optional[Dict]:
-        """Process using OCR for text extraction, then LLM for structuring"""
-
-        logger.info("Processing receipt with OCR then LLM")
-
-        try:
-
-            # Step 1: Extract raw text with OCR
-            ocr_result = self.ocr.extract_raw_text(image_data) if self.ocr_processing_mode == OCRProcessingMode.RAW_TEXT.value else self.ocr.extract_receipt_data(image_data)
-
-            if not ocr_result.success or not ocr_result.raw_text.strip():
-                logger.warning("OCR failed to extract text, falling back to LLM-only")
-                return self._process_llm(image_data)
-
-            # Step 2: Use LLM to structure the OCR text
-            structured_result = self.llm.structure_ocr_text(ocr_result.raw_text)
-
-            if structured_result:
-                structured_result['processing_method'] = 'ocr_llm'
-                structured_result['ocr_confidence'] = ocr_result.confidence
-                return structured_result
-
-            # Fallback to LLM-only if structuring fails
-            logger.warning("LLM structuring failed, falling back to LLM-only")
-            return self._process_llm(image_data)
-
-        except Exception as e:
-            logger.error(f"OCR+LLM processing error: {e}")
-            return self._process_llm(image_data)
-
-    def _process_pp_ocr_llm(self, image_data: bytes) -> Optional[Dict]:
-        """Process using pre-processing OCR, then LLM for structuring"""
-
-        logger.info("Processing receipt with pre-processing OCR then LLM")
-
-        # Enhance image before OCR
-        logger.info("Enhancing receipt image for better OCR accuracy")
-        image_data = self.image_preprocessor.enhance_image(image_data)
-
-        # Store the enhanced image
-        storage = StorageService()
-        image_url = storage.store_raw_image("test", image_data)
-
-        return self._process_ocr_llm(image_data)
+        return strategy.process(image_data)
