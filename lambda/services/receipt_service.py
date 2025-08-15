@@ -11,6 +11,7 @@ from services.document_processor_service import DocumentProcessorService
 from utils.helpers import create_response
 from config import MAX_ITEMS_DISPLAY, MAX_ITEM_NAME_LENGTH, setup_logging, MAX_RECEIPTS_PER_USER
 from utils.helpers import get_secure_user_id
+from receipt_schemas import ReceiptAnalysisResult
 
 
 setup_logging()
@@ -61,16 +62,22 @@ class ReceiptService:
         # Analyze receipt using hybrid processor
         logger.info(f"Analyzing receipt with ID: {receipt_id}")
         self.telegram.send_message(chat_id, "🔍 מנתח את הקבלה...")
-        receipt_data = self.processor.process_receipt(photo_data)
+        analysis_result  = self.processor.process_receipt(photo_data)
 
-        if not receipt_data:
-            return self.telegram.send_error(chat_id, "לא ניתן לעבד את הקבלה. נא לוודא שהתמונה ברורה ומכילה קבלה.")
+        if not analysis_result:
+            return self.telegram.send_error(
+                chat_id,
+                "❌ לא הצלחנו לעבד את הקבלה.\n\n"
+                "יתכן שהתמונה לא ברורה מספיק או שהנתונים לא תקינים.\n"
+                "נא לצלם שוב את הקבלה בתאורה טובה ולנסות שוב."
+            )
 
         try:
-            # Store data and respond
+            # Store validated data
             logger.info(f"Storing receipt data for ID: {receipt_id}")
+            receipt_data = analysis_result.receipt_data.model_dump_for_storage()
             self.storage.store_receipt_data(receipt_id, secure_user_id, receipt_data, image_url)
-            response_text = self._format_receipt_response(receipt_data, receipt_id)
+            response_text = self._format_receipt_response(analysis_result, receipt_id)
             self.telegram.send_message(chat_id, response_text, parse_mode=None)
 
             return create_response(200, {"status": "success"})
@@ -79,24 +86,25 @@ class ReceiptService:
             logger.error(f"Receipt processing error: {e}", exc_info=True)
             return self.telegram.send_error(chat_id, "שגיאה במהלך עיבוד הקבלה .")
 
-    def _format_receipt_response(self, receipt_data: Dict, receipt_id: str) -> str:
+    def _format_receipt_response(self, result: ReceiptAnalysisResult, receipt_id: str) -> str:
         """Format receipt data for Telegram with Hebrew support"""
+
+        receipt_data = result.receipt_data
+
         try:
-            result = "✅ ניתוח הקבלה הושלם \n\n"
+            response = "✅ ניתוח הקבלה הושלם\n\n"
 
             # Store info - no encoding/decoding needed for Hebrew
-            if receipt_data.get('store_name'):
-                store_name = str(receipt_data['store_name'])
-                result += f"🏪 חנות : {store_name}\n"
+            if receipt_data.store_name:
+                response += f"🏪 חנות : {receipt_data.store_name}\n"
 
-            if receipt_data.get('date'):
-                result += f"📅 תאריך : {receipt_data['date']}\n"
+            if receipt_data.date:
+                response += f"📅 תאריך : {receipt_data.date}\n"
 
-            if receipt_data.get('receipt_number'):
-                receipt_num = str(receipt_data['receipt_number'])
-                result += f"🧾 מס׳ קבלה : {receipt_num}\n"
+            if receipt_data.receipt_number:
+                response += f"🧾 מס׳ קבלה : {receipt_data.receipt_number}\n"
 
-            if receipt_data.get('payment_method'):
+            if receipt_data.payment_method:
                 payment_icons = {
                     'cash': '💵',
                     'credit_card': '💳',
@@ -107,45 +115,37 @@ class ReceiptService:
                     'credit_card': 'כרטיס אשראי',
                     'other': 'אחר'
                 }
-                method = receipt_data['payment_method']
-                icon = payment_icons.get(method, '💰')
-                label = payment_labels.get(method, method.replace('_', ' ').title())
-                result += f"{icon} אמצעי תשלום : {label}\n"
+                icon = payment_icons.get(receipt_data.payment_method, '💰')
+                label = payment_labels.get(receipt_data.payment_method, receipt_data.payment_method)
+                response += f"{icon} אמצעי תשלום : {label}\n"
 
-            result += "\n"
+            response += "\n"
 
             # Items section with proper price calculation
-            items = receipt_data.get('items', [])
-            if items:
-                result += "📋 פריטים :\n"
-                items_to_show = items[:MAX_ITEMS_DISPLAY]
+
+            if receipt_data.items:
+                response += "📋 פריטים :\n"
+                items_to_show = receipt_data.items[:MAX_ITEMS_DISPLAY]
 
                 for item in items_to_show:
                     # Get item details
-                    name = str(item.get('name', 'פריט לא ידוע'))
+                    name = item.name
 
                     # Truncate long names
                     if len(name) > MAX_ITEM_NAME_LENGTH:
                         name = name[:MAX_ITEM_NAME_LENGTH-3] + "..."
 
-                    # Get price and quantity
-                    unit_price = float(item.get('price', 0))
-                    quantity = float(item.get('quantity', 1))
-                    discount = float(item.get('discount', 0))
-
-                    # Calculate actual price: (unit_price * quantity) + discount
-                    # Note: discount is negative, so adding it reduces the price
-                    actual_price = (unit_price * quantity) + discount
+                    actual_price = (float(item.price) * float(item.quantity)) + float(item.discount)
 
                     # Format the line
                     line = f"• {name}"
 
                     # Show quantity if not 1 (handle both int and float quantities)
-                    if quantity != 1:
-                        if quantity == int(quantity):
-                            line += f" (x{int(quantity)})"
+                    if item.quantity != 1:
+                        if item.quantity == int(item.quantity):
+                            line += f" (x{int(item.quantity)})"
                         else:
-                            line += f" ({quantity:.3f})"
+                            line += f" ({item.quantity:.3f})"
 
                     # Show unit price
                     line += f" - ₪{actual_price:.2f}"
@@ -162,31 +162,33 @@ class ReceiptService:
                             'other': 'אחר'
                         }
 
-                    category = item.get('category', '')
+                    if item.category:
+                        category_label = category_labels.get(item.category, item.category)
+                        line += f" [{category_label}]"
 
-                    result += line + " [" + category_labels.get(category, '') + "] \n"
+                    response += line + "\n"
 
                 # Show if more items exist
-                if len(items) > MAX_ITEMS_DISPLAY:
-                    result += f"... ועוד {len(items) - MAX_ITEMS_DISPLAY} פריטים \n"
+                if len(receipt_data.items) > MAX_ITEMS_DISPLAY:
+                    response += f"... ועוד {len(receipt_data.items) - MAX_ITEMS_DISPLAY} פריטים \n"
 
             # Total section
-            if receipt_data.get('total'):
-                total = float(receipt_data.get('total', 0))
-                result += f"\n💰 סה״כ : ₪{total:.2f}"
+            if receipt_data.total:
+                response += f"\n💰 סה״כ : ₪{receipt_data.total:.2f}"
 
-            result += f"\n✅ נשמר בהצלחה במסד הנתונים "
+            response += f"\n✅ נשמר בהצלחה במסד הנתונים "
 
             # Processing method indicator (if available)
-            if receipt_data.get('processing_method'):
+            if result.processing_metadata and result.processing_metadata.get('processing_method'):
+                method = result.processing_metadata['processing_method']
                 methods = {
                     'llm': 'LLM',
                     'ocr_llm': 'OCR + LLM',
                     'pp_ocr_llm': 'Enhanced OCR + LLM'
                 }
-                result += f"\n\n{methods.get(receipt_data['processing_method'], '🔍')}"
+                response += f"\n\n{methods.get(method, '🔍')}"
 
-            return result
+            return response
 
         except Exception as e:
             logger.error(f"Formatting error: {e}")

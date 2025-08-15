@@ -8,6 +8,7 @@ from services.storage_service import StorageService
 from services.llm_service import LLMService
 from provider_factory import ProviderFactory
 from utils.image_preprocessor.pillow_preprocessor import ImagePreprocessorPillow
+from receipt_schemas import ReceiptAnalysisResult
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ class DocumentProcessingMode(Enum):
 # --- Strategy Interface ---
 class ReceiptProcessingStrategy(ABC):
     @abstractmethod
-    def process(self, image_data: bytes) -> Optional[Dict]:
+    def process(self, image_data: bytes) -> Optional[ReceiptAnalysisResult]:
         pass
 
 # --- Concrete Strategies ---
@@ -32,7 +33,7 @@ class LLMProcessingStrategy(ReceiptProcessingStrategy):
     def __init__(self, llm: LLMService):
         self.llm = llm
 
-    def process(self, image_data: bytes) -> Optional[Dict]:
+    def process(self, image_data: bytes) -> Optional[ReceiptAnalysisResult]:
         """
         Process receipt image using LLM only.
         """
@@ -42,6 +43,7 @@ class LLMProcessingStrategy(ReceiptProcessingStrategy):
             result = self.llm.analyze_receipt(image_data)
             if result:
                 result['processing_method'] = 'llm'
+
             return result
 
         except Exception as e:
@@ -54,7 +56,7 @@ class OCRLLMProcessingStrategy(ReceiptProcessingStrategy):
         self.llm = llm
         self.ocr_processing_mode = ocr_processing_mode
 
-    def process(self, image_data: bytes) -> Optional[Dict]:
+    def process(self, image_data: bytes) -> Optional[ReceiptAnalysisResult]:
         """
         Process receipt image using OCR then LLM.
         """
@@ -70,8 +72,9 @@ class OCRLLMProcessingStrategy(ReceiptProcessingStrategy):
             structured_result = self.llm.structure_ocr_text(ocr_result.raw_text)
 
             if structured_result:
-                structured_result['processing_method'] = 'ocr_llm'
-                structured_result['ocr_confidence'] = ocr_result.confidence
+                if structured_result.processing_metadata:
+                    structured_result.processing_metadata['ocr_confidence'] = ocr_result.confidence
+
                 return structured_result
 
             logger.warning("LLM structuring failed, falling back to LLM-only")
@@ -86,16 +89,19 @@ class PPOCRLLMProcessingStrategy(ReceiptProcessingStrategy):
         self.image_preprocessor = image_preprocessor
         self.ocr_llm_strategy = OCRLLMProcessingStrategy(ocr, llm, ocr_processing_mode)
 
-    def process(self, image_data: bytes) -> Optional[Dict]:
+    def process(self, image_data: bytes) -> Optional[ReceiptAnalysisResult]:
         logger.info("Processing receipt with pre-processing OCR then LLM")
 
         logger.info("Enhancing receipt image for better OCR accuracy")
-        image_data = self.image_preprocessor.enhance_image(image_data)
+        enhanced_image = self.image_preprocessor.enhance_image(image_data)
 
-        storage = StorageService()
-        storage.store_raw_image("test", image_data)
+        result = self.ocr_llm_strategy.process(enhanced_image)
 
-        return self.ocr_llm_strategy.process(image_data)
+        # Update processing method in metadata
+        if result and result.processing_metadata:
+            result.processing_metadata['processing_method'] = 'pp_ocr_llm'
+
+        return result
 
 # --- Context ---
 class DocumentProcessorService:
@@ -115,7 +121,7 @@ class DocumentProcessorService:
             DocumentProcessingMode.PP_OCR_LLM.value: PPOCRLLMProcessingStrategy(self.image_preprocessor, self.ocr, self.llm, self.ocr_processing_mode),
         }
 
-    def process_receipt(self, image_data: bytes) -> Dict:
+    def process_receipt(self, image_data: bytes) -> Optional[ReceiptAnalysisResult]:
         """Process receipt using specified mode"""
 
         logger.info(f"Processing receipt with mode: {self.document_processing_mode}")

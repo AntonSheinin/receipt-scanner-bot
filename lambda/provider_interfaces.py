@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Optional, List, Dict, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 
 @dataclass
@@ -23,7 +23,7 @@ class OCRResponse:
     receipt_number: Optional[str] = None
     total: Optional[Decimal] = None
     payment_method: Optional[str] = None
-    items: List[LineItem] = None
+    items: List[LineItem] = field(default_factory=list)
     confidence: float = 0.0
     success: bool = True
     error_message: Optional[str] = None

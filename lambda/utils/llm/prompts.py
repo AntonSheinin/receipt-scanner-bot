@@ -73,7 +73,18 @@ Israeli Receipt Specific Rules:
 - Store loyalty cards: מועדון, חבר מועדון, כרטיס אשראי מועדון
 - Receipt types: חשבונית מס (tax invoice), קבלה (receipt), חשבונית מס קבלה
 
-CRITICAL ITEM PARSING RULE:
+CRITICAL DATE PARSING RULES:
+- Israeli receipts use DD/MM/YYYY or DD/MM/YY format
+- For 2-digit years (YY): ALWAYS assume 20XX (2000s), never 19XX
+- Examples:
+  * "14/08/25" = August 14, 2025 (NOT 2014!)
+  * "25/12/24" = December 25, 2024
+  * "03/01/23" = January 3, 2023
+- ALWAYS output date in YYYY-MM-DD format
+- If date is ambiguous, use context clues (receipt freshness, other dates on receipt)
+- If unable to determine year definitively, assume current decade (202X)
+
+CRITICAL ITEM PARSING RULES:
 - Lines starting with a number (product code/barcode) mark the START of a new item
 - All following lines WITHOUT a leading number belong to that item:
   * Weight/quantity measurements (e.g., "0.724" = actual weight in kg)
@@ -110,13 +121,24 @@ Payment method detection rules:
 - Use null if payment method cannot be determined
 
 Important:
-- Return ONLY the JSON object, no markdown formatting or explanations or comments
 - Israeli phone numbers format: 03-1234567, 052-1234567
-- Israeli dates may appear as: DD/MM/YYYY or DD.MM.YYYY
 - Prices may include ₪ symbol or ש"ח abbreviation
 - The "discount" field is MANDATORY for all items (use 0 if no discount)
 - Item prices should reflect the original price shown on receipt, not the discounted price
-- Validate that sum of (price * quantity + discount) for all items equals the total"""
+- Validate that sum of (price * quantity + discount) for all items equals the total
+
+CRITICAL REQUIRED FIELDS (must never be null/empty):
+- store_name: The business name (Hebrew or English text)
+- date: Receipt date (within last 6 months)
+- payment_method: Must be exactly "cash", "credit_card", or "other"
+- total: Total amount as positive decimal number
+
+Items array can be empty for simple receipts without item breakdown.
+If any required field is missing or invalid, the analysis fails completely.
+
+Return ONLY valid JSON with all required fields, no explanations.
+
+"""
 
     @staticmethod
     def get_query_plan_prompt(question: str) -> str:
@@ -213,7 +235,17 @@ Israeli Receipt Specific Patterns:
 - VAT/Tax (מע"מ): Skip this line - it's not an item
 - Deposit (פיקדון): Include as separate item with "deposit" category
 - Quantity units: יח', ק"ג, גרם, ליטר, מ"ל
-- Date formats: DD/MM/YYYY, DD.MM.YYYY, DD-MM-YYYY
+
+CRITICAL DATE PARSING RULES:
+- Israeli receipts use DD/MM/YYYY or DD/MM/YY format
+- For 2-digit years (YY): ALWAYS assume 20XX (2000s), never 19XX
+- Examples:
+  * "14/08/25" = August 14, 2025 (NOT 2014!)
+  * "25/12/24" = December 25, 2024
+  * "03/01/23" = January 3, 2023
+- ALWAYS output date in YYYY-MM-DD format
+- If date is ambiguous, use context clues (receipt freshness, other dates on receipt)
+- If unable to determine year definitively, assume current decade (202X)
 
 CRITICAL ITEM PARSING RULE:
 - Lines starting with a number (product code/barcode) mark the START of a new item
@@ -260,7 +292,19 @@ Rules:
 - Categorize items based on their names and context
 - Hebrew text may appear reversed or broken in OCR - try to reconstruct meaningful item names
 - Remove any Unicode escape sequences (\\u05xx) - use actual Hebrew characters
-- Validate that sum of (price * quantity + discount) for all items approximates the total"""
+- Validate that sum of (price * quantity + discount) for all items approximates the total
+
+CRITICAL REQUIRED FIELDS (must never be null/empty):
+- store_name: The business name (Hebrew or English text)
+- date: Receipt date (within last 6 months)
+- payment_method: Must be exactly "cash", "credit_card", or "other"
+- total: Total amount as positive decimal number
+
+Items array can be empty for simple receipts without item breakdown.
+If any required field is missing or invalid, the analysis fails completely.
+
+Return ONLY valid JSON with all required fields, no explanations.
+"""
 
     @staticmethod
     def get_generate_query_plan_prompt(question: str):

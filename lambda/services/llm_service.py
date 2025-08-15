@@ -5,6 +5,8 @@ import json
 from config import setup_logging
 from provider_factory import ProviderFactory
 from utils.llm.prompts import PromptManager
+from receipt_schemas import ReceiptData, ReceiptAnalysisResult
+from pydantic import ValidationError
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -14,7 +16,7 @@ class LLMService:
         self.provider = ProviderFactory.create_llm_provider(provider_name)
         self.prompt_manager = PromptManager()
 
-    def analyze_receipt(self, image_data: bytes) -> Optional[Dict]:
+    def analyze_receipt(self, image_data: bytes) -> Optional[ReceiptAnalysisResult]:
         """Analyze receipt image"""
 
         logger.info("Analyzing receipt image with LLM")
@@ -24,7 +26,11 @@ class LLMService:
 
         logger.info(f"LLM response: {response.content if response else 'No response'}")
 
-        return self.parse_json_response(response.content) if response else None
+        # Parse JSON and validate with Pydantic
+        return self._create_validated_result(
+            response.content,
+            processing_method='llm'
+        ) if response else None
 
     def generate_query_plan(self, question: str) -> Optional[Dict]:
         """Generate query plan from natural language"""
@@ -50,17 +56,19 @@ class LLMService:
 
         return response.content if response else None
 
-    def structure_ocr_text(self, ocr_text: str) -> Optional[Dict]:
-        """Structure OCR-extracted text using LLM"""
+    def structure_ocr_text(self, ocr_text: str) -> Optional[ReceiptAnalysisResult]:
+        """Structure OCR text with Pydantic validation"""
 
         logger.info("Structuring OCR text with LLM")
 
         prompt = self.prompt_manager.get_structure_ocr_text_prompt(ocr_text)
         response = self.provider.generate_text(prompt)
 
-        logger.info(f"LLM structured OCR response: {response.content if response else 'No response'}")
-
-        return self.parse_json_response(response.content) if response else None
+        return self._create_validated_result(
+            response.content,
+            raw_text=ocr_text,
+            processing_method='ocr_llm'
+        ) if response else None
 
     @staticmethod
     def parse_json_response(content: str) -> Optional[Dict]:
@@ -105,4 +113,29 @@ class LLMService:
             return None
 
         except json.JSONDecodeError:
+            return None
+
+    def _create_validated_result(self, llm_content: str, raw_text: str = None, processing_method: str = None) -> Optional[ReceiptAnalysisResult]:
+        """Parse LLM response and validate with strict Pydantic validation"""
+
+        # Parse JSON from LLM response
+        parsed_data = self.parse_json_response(llm_content)
+        if not parsed_data:
+            logger.error("Failed to parse JSON from LLM response")
+            return None
+
+        # Strict validation - either passes completely or fails
+        try:
+            return ReceiptAnalysisResult.from_llm_response(
+                llm_data=parsed_data,
+                raw_text=raw_text,
+                processing_method=processing_method
+            )
+
+        except ValidationError as e:
+            logger.warning(f"Receipt validation failed: {e}")
+            return None
+
+        except Exception as e:
+            logger.error(f"Unexpected error creating receipt result: {e}")
             return None
