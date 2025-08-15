@@ -1,7 +1,7 @@
 """
 Producer Lambda - Telegram Webhook Handler
-Only responsible for queuing messages, no processing
 """
+
 import json
 import logging
 from typing import Dict, Any, Optional
@@ -70,6 +70,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Optional[Dict[str, An
         if success:
             logger.info(f"Successfully queued message for chat_id: {chat_id}")
             return create_response(200, {"status": "queued_successfully"})
+
         else:
             # If queuing fails, notify user
             telegram_service.send_message(chat_id, "❌ הייתה בעיה זמנית. אנא נסה שוב.")

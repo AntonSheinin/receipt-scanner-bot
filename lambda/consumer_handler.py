@@ -1,4 +1,3 @@
-# lambda/consumer_handler.py - NEW FILE
 """
 Consumer Lambda - Processes SQS Messages via Orchestration Service
 """
@@ -12,7 +11,6 @@ from services.orchestrator_service import OrchestratorService
 setup_logging()
 logger = logging.getLogger(__name__)
 
-# Initialize orchestrator service
 orchestrator_service = OrchestratorService()
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -36,7 +34,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
             logger.info(f"Processing message for chat_id: {chat_id} (queued at: {timestamp})")
 
-            # Use OrchestratorService to process the message
             result = orchestrator_service.process_telegram_message(telegram_message)
 
             results.append({

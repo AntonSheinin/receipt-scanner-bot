@@ -29,13 +29,12 @@ class QueryService:
         self.aggregator = ResultAggregatorService()
         self.prompts = PromptManager()
 
-    def process_query(self, question: str, user_id: str) -> Dict:
+    def process_query(self, question: str, chat_id: int) -> Dict:
         """Handle natural language queries in 4 steps"""
 
         logger.info(f"Processing query: {question}")
 
-        chat_id = int(user_id)
-        secure_user_id = get_secure_user_id(user_id)
+        secure_user_id = get_secure_user_id(chat_id)
 
         try:
             self.telegram.send_typing(chat_id)

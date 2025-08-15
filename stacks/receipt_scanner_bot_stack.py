@@ -7,6 +7,7 @@ import json
 from typing import Any, Tuple
 
 from aws_cdk.aws_lambda_python_alpha import PythonFunction
+from aws_cdk.aws_lambda import IFunction
 from aws_cdk import (
     Stack,
     Duration,
@@ -313,7 +314,7 @@ class ReceiptScannerBotStack(Stack):
             alarm_description="Messages in dead letter queue - manual intervention needed"
         )
 
-    def _create_api_gateway(self, lambda_func: _lambda.Function, log_group: logs.LogGroup) -> apigwv2.HttpApi:
+    def _create_api_gateway(self, lambda_func: IFunction, log_group: logs.LogGroup) -> apigwv2.HttpApi:
         """Create HTTP API for Telegram webhook with custom access logs"""
 
         lambda_integration = integrations.HttpLambdaIntegration(
@@ -359,13 +360,10 @@ class ReceiptScannerBotStack(Stack):
     def _create_webhook_setup(self, bot_token: str, webhook_url: str, api_gateway: apigwv2.HttpApi, log_group: logs.LogGroup) -> None:
         """Create webhook setup custom resource"""
 
-        # Create webhook setter Lambda
-        webhook_setter = self._create_webhook_setter_lambda(log_group)
-
         # Create custom resource provider
         webhook_provider = cr.Provider(
             self, "WebhookSetterProvider",
-            on_event_handler=webhook_setter
+            on_event_handler=self._create_webhook_setter_lambda(log_group)
         )
 
         # Create custom resource
@@ -384,22 +382,22 @@ class ReceiptScannerBotStack(Stack):
         """Create Lambda function for webhook setup"""
         return PythonFunction(
             self, "WebhookSetterHandler",
-            entry="lambda",  # Folder that contains webhook_setter_handler.py and requirements.txt
-            index="webhook_setter_handler.py",  # File with the Lambda handler
-            handler="lambda_handler",           # Function inside the file
+            entry="lambda",
+            index="webhook_setter_handler.py",
+            handler="lambda_handler",
             runtime=_lambda.Runtime.PYTHON_3_12,
             timeout=Duration.minutes(2),
             environment={
-                "TELEGRAM_BOT_TOKEN": os.getenv('TELEGRAM_BOT_TOKEN'),
-                "BEDROCK_REGION": os.getenv('BEDROCK_REGION'),
-                "BEDROCK_MODEL_ID": os.getenv('BEDROCK_MODEL_ID'),
-                "OCR_PROVIDER": os.getenv('OCR_PROVIDER'),
-                "LLM_PROVIDER": os.getenv('LLM_PROVIDER'),
-                "DOCUMENT_PROCESSING_MODE": os.getenv('DOCUMENT_PROCESSING_MODE'),
-                "OCR_PROCESSING_MODE": os.getenv('OCR_PROCESSING_MODE'),
-                "GOOGLE_CREDENTIALS_JSON": os.getenv('GOOGLE_CREDENTIALS_JSON'),
-                "OPENAI_API_KEY": os.getenv('OPENAI_API_KEY'),
-                "OPENAI_MODEL_ID": os.getenv('OPENAI_MODEL_ID')
+                "TELEGRAM_BOT_TOKEN": os.getenv('TELEGRAM_BOT_TOKEN', ''),
+                "BEDROCK_REGION": os.getenv('BEDROCK_REGION', ''),
+                "BEDROCK_MODEL_ID": os.getenv('BEDROCK_MODEL_ID', ''),
+                "OCR_PROVIDER": os.getenv('OCR_PROVIDER', ''),
+                "LLM_PROVIDER": os.getenv('LLM_PROVIDER', ''),
+                "DOCUMENT_PROCESSING_MODE": os.getenv('DOCUMENT_PROCESSING_MODE', ''),
+                "OCR_PROCESSING_MODE": os.getenv('OCR_PROCESSING_MODE', ''),
+                "GOOGLE_CREDENTIALS_JSON": os.getenv('GOOGLE_CREDENTIALS_JSON', ''),
+                "OPENAI_API_KEY": os.getenv('OPENAI_API_KEY', ''),
+                "OPENAI_MODEL_ID": os.getenv('OPENAI_MODEL_ID', '')
             },
             log_group=log_group,
             logging_format=_lambda.LoggingFormat.TEXT

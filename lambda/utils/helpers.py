@@ -80,17 +80,6 @@ def normalize_date(date_str: str) -> Optional[str]:
 
         return date_str  # Return as-is if can't parse
 
-def create_response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:
-    """
-        Create Lambda response
-    """
-
-    return {
-        "statusCode": status_code,
-        "headers": {"Content-Type": "application/json"},
-        "body": json.dumps(body)
-    }
-
 def get_secure_user_id(telegram_user_id: Union[str, int]) -> str:
     """
     Generate secure, deterministic user ID using UUID5

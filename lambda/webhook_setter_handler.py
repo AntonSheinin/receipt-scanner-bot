@@ -1,3 +1,7 @@
+"""
+    Webhook Setter Lambda - Sets up the Telegram webhook
+"""
+
 import json
 import logging
 import urllib3
@@ -23,11 +27,11 @@ def lambda_handler(event, context) -> dict:
 
     response_data = {}
     response_status = "SUCCESS"
-    
+
     try:
         # Initialize telegram service (will use BOT_TOKEN from environment)
         telegram_service = TelegramService()
-        
+
         if request_type in ('Create', 'Update'):
             logger.info(f"Setting webhook to: {webhook_url}")
             logger.info(f"Setting commands for bot")
@@ -40,24 +44,24 @@ def lambda_handler(event, context) -> dict:
 
             if not webhook_response.get('success') or not commands_response.get('success'):
                 raise Exception(f"Setup failed - Webhook: {webhook_response}, Commands: {commands_response}")
-            
+
             response_data = {
                 'webhook': webhook_response,
                 'commands': commands_response,
                 'webhook_url': webhook_url
             }
-            
+
         elif request_type == 'Delete':
             logger.info("Deleting webhook")
             response_data = telegram_service.delete_webhook()
-            
+
     except Exception as e:
         logger.critical(f"CRITICAL ERROR in webhook setup: {e}")
         response_status = "FAILED"
         response_data = {'Error': str(e)}
 
     send_response(event, context, response_status, response_data)
-    
+
     return {
         'statusCode': 200 if response_status == "SUCCESS" else 500,
         'body': json.dumps(response_data)
@@ -66,7 +70,7 @@ def lambda_handler(event, context) -> dict:
 
 def send_response(event, context, response_status, response_data) -> None:
     """Send response back to CloudFormation"""
-    
+
     response_url = event.get('ResponseURL')
     response_body = {
         'Status': response_status,
@@ -79,7 +83,7 @@ def send_response(event, context, response_status, response_data) -> None:
     }
     json_response = json.dumps(response_body)
     logger.info(f"Response: {json_response}")
-    
+
     try:
         http = urllib3.PoolManager()
         response = http.request(

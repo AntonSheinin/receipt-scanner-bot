@@ -28,7 +28,6 @@ class OrchestratorService:
     """Orchestrates message processing and routing"""
 
     def __init__(self):
-        # Initialize all processing services
         self.receipt_service = ReceiptService()
         self.query_service = QueryService()
         self.telegram_service = TelegramService()
@@ -45,7 +44,6 @@ class OrchestratorService:
         logger.info(f"Orchestrating {message_type.value} message for chat_id: {chat_id}")
 
         try:
-            # Route based on message type
             if message_type == MessageType.PHOTO:
                 return self._handle_photo_message(telegram_message, chat_id)
 
@@ -82,6 +80,7 @@ class OrchestratorService:
 
             if text.startswith('/'):
                 return MessageType.COMMAND
+
             elif text:
                 return MessageType.TEXT_QUERY
 
@@ -109,7 +108,7 @@ class OrchestratorService:
             return {"status": "receipt_limit_exceeded"}
 
         # Send processing message
-        self.telegram_service.send_message(chat_id, "📸 מעבדים את הקבלה... נא להמתין.")
+        self.telegram_service.send_message(chat_id, "📸 מעבדים את הקבלה...")
 
         # Process receipt using receipt service
         result = self.receipt_service.process_receipt(telegram_message, chat_id)

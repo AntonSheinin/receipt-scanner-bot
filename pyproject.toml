@@ -22,3 +22,6 @@ cdk = [
     "python-dotenv>=1.0.0",
 ]
 
+[tool.ty.rules]
+unresolved-import = "ignore"
+
