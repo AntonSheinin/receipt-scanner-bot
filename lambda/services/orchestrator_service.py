@@ -3,7 +3,7 @@
 Orchestration Service - Routes messages to appropriate services
 """
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from enum import Enum
 
 from services.receipt_service import ReceiptService
@@ -11,7 +11,7 @@ from services.query_service import QueryService
 from services.telegram_service import TelegramService
 from services.storage_service import StorageService
 from config import MAX_RECEIPTS_PER_USER, setup_logging
-from utils.helpers import get_secure_user_id, create_response
+from utils.helpers import get_secure_user_id
 
 
 setup_logging()
@@ -179,7 +179,6 @@ class OrchestratorService:
                 f"📅 תאריך קבלה: {receipt_date}\n"
                 f"📤 תאריך העלאה: {upload_date[:10]}\n"
                 f"💰 סך הכל: {total} שח\n"
-                f"🆔 מזהה קבלה: `{deleted_receipt['receipt_id']}`"
             )
 
             logger.info(f"Deleted last uploaded receipt {deleted_receipt['receipt_id']}")
@@ -206,6 +205,7 @@ class OrchestratorService:
                 "💾 כל התמונות הקשורות הוסרו מהאחסון"
             )
             logger.info(f"Deleted {deleted_count} receipts")
+
         else:
             message = "❌ לא נמצאו קבלות למחיקה. אין קבלות שמורות כרגע."
             logger.info("No receipts found to delete")

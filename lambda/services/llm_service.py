@@ -5,7 +5,7 @@ import json
 from config import setup_logging
 from provider_factory import ProviderFactory
 from utils.llm.prompts import PromptManager
-from receipt_schemas import ReceiptData, ReceiptAnalysisResult
+from receipt_schemas import ReceiptAnalysisResult
 from pydantic import ValidationError
 
 setup_logging()

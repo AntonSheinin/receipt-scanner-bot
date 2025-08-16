@@ -6,7 +6,8 @@ from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from config import DYNAMODB_TABLE_NAME, setup_logging
 from provider_factory import ProviderFactory
-from utils.helpers import convert_decimals_to_floats, safe_string_value
+from receipt_schemas import ReceiptData
+from pydantic import ValidationError
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -37,94 +38,72 @@ class StorageService:
             logger.error(f"Image storage error: {e}")
             return None
 
-    def store_receipt_data(self, receipt_id: str, secure_user_id: str, receipt_data: Dict,
-                          image_url: str, metadata: Optional[Dict] = None) -> bool:
+    def store_receipt_data(self, receipt_id: str, secure_user_id: str, receipt_data: ReceiptData,
+                      image_url: str, metadata: Optional[Dict] = None) -> bool:
         """Store receipt data using DocumentStorage provider"""
+
+        # Prepare item - direct access to Pydantic fields
+        item = {
+            'user_id': secure_user_id,
+            'receipt_id': receipt_id,
+            'created_at': datetime.now(timezone.utc).isoformat(),
+            'image_url': image_url,
+            'store_name': receipt_data.store_name,
+            'payment_method': receipt_data.payment_method,
+            'receipt_number': receipt_data.receipt_number,
+            'total': receipt_data.total,
+            'items': [item.model_dump() for item in receipt_data.items],
+            'date': receipt_data.date
+        }
+
+        # Add metadata if provided
+        if metadata:
+            item['metadata'] = metadata
+
+        # Remove None values (only receipt_number can be None)
+        item = {k: v for k, v in item.items() if v is not None}
+
         try:
-            if not self.table_name:
-                logger.error("DynamoDB table name not configured")
-                return False
-
-            # Check if receipt already exists
-            existing = self.receipt_storage.get(
-                table=self.table_name,
-                key={'user_id': secure_user_id, 'receipt_id': receipt_id}
-            )
-
-            if existing:
-                logger.info(f"Receipt {receipt_id} already exists, skipping storage")
-                return True
-
-            # Prepare item
-            item = {
-                'user_id': secure_user_id,
-                'receipt_id': receipt_id,
-                'created_at': datetime.now(timezone.utc).isoformat(),
-                'image_url': image_url,
-                'store_name': safe_string_value(receipt_data.get('store_name'), 'Unknown Store'),
-                'payment_method': safe_string_value(receipt_data.get('payment_method'), 'other'),
-                'receipt_number': receipt_data.get('receipt_number'),
-                'total': receipt_data.get('total'),
-                'items': receipt_data.get('items', []),
-                'raw_data': receipt_data
-            }
-
-            # Add metadata if provided
-            if metadata:
-                item['metadata'] = metadata
-
-            # Handle date field for GSI compatibility
-            date_value = receipt_data.get('date')
-            if date_value and isinstance(date_value, str) and date_value.strip():
-                item['date'] = date_value.strip()
-
-            # Remove None values
-            item = {k: v for k, v in item.items() if v is not None}
-
             return self.receipt_storage.put(self.table_name, item)
 
         except Exception as e:
             logger.error(f"Receipt data storage error: {e}")
             return False
 
-    def get_filtered_receipts(self, query_plan: Dict, secure_user_id: str) -> List[Dict]:
+    def get_filtered_receipts(self, query_plan: Dict, secure_user_id: str) -> List[ReceiptData]:
         """Get filtered receipts using DocumentStorage provider"""
-        try:
-            if not self.table_name:
-                logger.error("DynamoDB table name not configured")
-                return []
 
-            filter_params = query_plan.get("filter", {})
-            receipts = []
+        filter_params = query_plan.get("filter", {})
+        receipts = []
 
-            # Check if we can use an index for efficient querying
-            if "payment_methods" in filter_params and filter_params["payment_methods"]:
-                receipts = self._query_by_payment_methods(secure_user_id, filter_params["payment_methods"])
-            elif "date_range" in filter_params:
-                receipts = self._query_by_date_range(secure_user_id, filter_params["date_range"])
-            elif "store_names" in filter_params and filter_params["store_names"]:
-                receipts = self._query_by_store_names(secure_user_id, filter_params["store_names"])
-            else:
-                # Fall back to scanning all user receipts
-                receipts = self._scan_user_receipts(secure_user_id)
+        # Check if we can use an index for efficient querying
+        if "payment_methods" in filter_params and filter_params["payment_methods"]:
+            receipts = self._query_by_payment_methods(secure_user_id, filter_params["payment_methods"])
 
-            # Apply additional filters
-            receipts = self._apply_additional_filters(receipts, filter_params)
+        elif "date_range" in filter_params:
+            receipts = self._query_by_date_range(secure_user_id, filter_params["date_range"])
 
-            logger.info(f"Found {len(receipts)} receipts for user {secure_user_id}")
-            return receipts
+        elif "store_names" in filter_params and filter_params["store_names"]:
+            receipts = self._query_by_store_names(secure_user_id, filter_params["store_names"])
 
-        except Exception as e:
-            logger.error(f"Query error: {e}")
-            return []
+        else:
+            # Fall back to scanning all user receipts
+            receipts = self._scan_user_receipts(secure_user_id)
+
+        # Apply additional filters
+        receipts = self._apply_additional_filters(receipts, filter_params)
+
+        pydantic_receipts = []
+        for receipt_dict in receipts:
+            # Extract the receipt data from storage format
+            pydantic_receipts.append(ReceiptData(**receipt_dict))
+
+        logger.info(f"Found {len(pydantic_receipts)} receipts for user {secure_user_id}")
+        return pydantic_receipts
 
     def delete_last_uploaded_receipt(self, secure_user_id: str) -> Optional[Dict]:
         """Delete the most recently uploaded receipt for a user"""
         try:
-            if not self.table_name:
-                logger.error("DynamoDB table name not configured")
-                return None
-
             # Get all receipts for user
             receipts = self.receipt_storage.query(
                 table=self.table_name,
@@ -170,10 +149,6 @@ class StorageService:
     def delete_all_receipts(self, secure_user_id: str) -> int:
         """Delete all receipts for a user"""
         try:
-            if not self.table_name:
-                logger.error("DynamoDB table name not configured")
-                return 0
-
             # Get all receipts for user
             receipts = self.receipt_storage.query(
                 table=self.table_name,
@@ -212,10 +187,6 @@ class StorageService:
     def count_user_receipts(self, secure_user_id: str) -> int:
         """Count total receipts for a user"""
         try:
-            if not self.table_name:
-                logger.error("DynamoDB table name not configured")
-                return 0
-
             receipts = self.receipt_storage.query(
                 table=self.table_name,
                 key_condition={

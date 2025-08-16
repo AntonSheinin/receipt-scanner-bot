@@ -4,7 +4,7 @@ Query Processing Service
 import json
 import logging
 from typing import Dict, Optional, List, Any
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
 from config import LLM_PROVIDER, setup_logging
 
@@ -199,73 +199,28 @@ class QueryService:
 
     def _sort_receipts(self, receipts: List[Dict], sort_by: str) -> List[Dict]:
         """Sort receipts based on criteria with robust error handling"""
-        try:
-            def safe_datetime_key(receipt: Dict[str, Any]) -> str:
-                """Safely extract datetime for sorting"""
-                created_at = receipt.get('created_at')
-                if not created_at:
-                    return '1900-01-01T00:00:00'
+        # Mapping of sort criteria to sort functions
+        sort_functions = {
+            "upload_date_desc": lambda r: r.created_at if hasattr(r, 'created_at') else '1900-01-01T00:00:00',
+            "upload_date_asc": lambda r: r.created_at if hasattr(r, 'created_at') else '1900-01-01T00:00:00',
+            "receipt_date_desc": lambda r: r.date if hasattr(r, 'date') else '1900-01-01',
+            "receipt_date_asc": lambda r: r.date if hasattr(r, 'date') else '1900-01-01',
+            "total_desc": lambda r: r.total if hasattr(r, 'total') else 0.0,
+            "total_asc": lambda r: r.total if hasattr(r, 'total') else 0.0,
+        }
 
-                # Handle various datetime formats
-                if isinstance(created_at, str):
-                    try:
-                        # Try to parse and reformat to ensure consistent sorting
-                        dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                        return dt.isoformat()
-                    except ValueError:
-                        return '1900-01-01T00:00:00'
-                return str(created_at)
+        # Determine reverse flag
+        reverse_sorts = {"upload_date_desc", "receipt_date_desc", "total_desc"}
 
-            def safe_date_key(receipt: Dict[str, Any]) -> str:
-                """Safely extract date for sorting"""
-                date_val = receipt.get('date')
-                if not date_val:
-                    return '1900-01-01'
-
-                if isinstance(date_val, str) and len(date_val) >= 10:
-                    # Ensure YYYY-MM-DD format for proper string sorting
-                    try:
-                        # Validate date format
-                        datetime.strptime(date_val[:10], '%Y-%m-%d')
-                        return date_val[:10]
-                    except ValueError:
-                        pass
-                return '1900-01-01'
-
-            def safe_float_key(receipt: Dict[str, Any]) -> float:
-                """Safely extract numeric total for sorting"""
-                total = receipt.get('total', 0)
-                try:
-                    return float(total) if total is not None else 0.0
-                except (ValueError, TypeError):
-                    return 0.0
-
-            # Mapping of sort criteria to sort functions
-            sort_functions = {
-                "upload_date_desc": lambda x: safe_datetime_key(x),
-                "upload_date_asc": lambda x: safe_datetime_key(x),
-                "receipt_date_desc": lambda x: safe_date_key(x),
-                "receipt_date_asc": lambda x: safe_date_key(x),
-                "total_desc": lambda x: safe_float_key(x),
-                "total_asc": lambda x: safe_float_key(x),
-            }
-
-            # Determine reverse flag
-            reverse_sorts = {"upload_date_desc", "receipt_date_desc", "total_desc"}
-
-            if sort_by in sort_functions:
-                return sorted(
-                    receipts,
-                    key=sort_functions[sort_by],
-                    reverse=sort_by in reverse_sorts
-                )
-            else:
-                # Default to upload date desc
-                return sorted(receipts, key=safe_datetime_key, reverse=True)
-
-        except Exception as e:
-            logger.error(f"Sorting error: {e}")
-            return receipts
+        if sort_by in sort_functions:
+            return sorted(
+                receipts,
+                key=sort_functions[sort_by],
+                reverse=sort_by in reverse_sorts
+            )
+        else:
+            # Default to upload date desc
+            return sorted(receipts, key=lambda r: r.date, reverse=True)
 
     def _filter_by_items(self, receipts: List[Dict], filter_params: Dict) -> List[Dict]:
         """Filter receipts by item-level criteria"""

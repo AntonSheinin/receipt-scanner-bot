@@ -22,13 +22,11 @@ class DocumentProcessingMode(Enum):
     OCR_LLM = "ocr_llm"
     PP_OCR_LLM = "pp_ocr_llm"
 
-# --- Strategy Interface ---
 class ReceiptProcessingStrategy(ABC):
     @abstractmethod
     def process(self, image_data: bytes) -> Optional[ReceiptAnalysisResult]:
         pass
 
-# --- Concrete Strategies ---
 class LLMProcessingStrategy(ReceiptProcessingStrategy):
     def __init__(self, llm: LLMService):
         self.llm = llm
@@ -103,7 +101,6 @@ class PPOCRLLMProcessingStrategy(ReceiptProcessingStrategy):
 
         return result
 
-# --- Context ---
 class DocumentProcessorService:
     """Hybrid service for receipt processing using OCR and/or LLM"""
 
@@ -127,5 +124,7 @@ class DocumentProcessorService:
         logger.info(f"Processing receipt with mode: {self.document_processing_mode}")
 
         strategy = self.strategies.get(self.document_processing_mode, self.strategies[DocumentProcessingMode.LLM.value])
+
+        logger.info(f"Using strategy: {strategy.__class__.__name__}")
 
         return strategy.process(image_data)

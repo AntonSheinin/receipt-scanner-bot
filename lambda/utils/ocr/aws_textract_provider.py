@@ -6,7 +6,8 @@ from utils.helpers import normalize_date
 from botocore.exceptions import ClientError
 from config import setup_logging, AWS_REGION
 
-from provider_interfaces import OCRProvider, OCRResponse, LineItem
+from provider_interfaces import OCRProvider, OCRResponse
+from receipt_schemas import ReceiptItem
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -126,7 +127,7 @@ class TextractProvider(OCRProvider):
 
         return summary
 
-    def _extract_line_items(self, expense_doc: Dict[str, Any]) -> List[LineItem]:
+    def _extract_line_items(self, expense_doc: Dict[str, Any]) -> List[ReceiptItem]:
         """Extract line items from expense document"""
         items = []
 
@@ -140,17 +141,20 @@ class TextractProvider(OCRProvider):
 
                     if field_type == 'item':
                         item_data['name'] = value
+
                     elif field_type == 'price':
                         item_data['price'] = self._parse_amount(value)
+
                     elif field_type == 'quantity':
                         item_data['quantity'] = self._parse_quantity(value)
 
                 if item_data.get('name'):
-                    items.append(LineItem(
+                    items.append(ReceiptItem(
                         name=item_data['name'],
-                        price=item_data.get('price', Decimal('0')),
-                        quantity=item_data.get('quantity', 1),
-                        category='other'
+                        price=Decimal(item_data.get('price', 0)),
+                        quantity=Decimal(item_data.get('quantity', 1)),
+                        category='other',
+                        discount=Decimal(item_data.get('discount', 0)),
                     ))
 
         return items

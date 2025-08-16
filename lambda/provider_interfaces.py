@@ -2,18 +2,12 @@ from abc import ABC, abstractmethod
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 from decimal import Decimal
+from receipt_schemas import ReceiptItem
 
 @dataclass
 class LLMResponse:
     content: str
     usage_tokens: Optional[int] = None
-
-@dataclass
-class LineItem:
-    name: str
-    price: Decimal
-    quantity: int = 1
-    category: Optional[str] = None
 
 @dataclass
 class OCRResponse:
@@ -23,7 +17,7 @@ class OCRResponse:
     receipt_number: Optional[str] = None
     total: Optional[Decimal] = None
     payment_method: Optional[str] = None
-    items: List[LineItem] = field(default_factory=list)
+    items: List[ReceiptItem] = field(default_factory=list)
     confidence: float = 0.0
     success: bool = True
     error_message: Optional[str] = None

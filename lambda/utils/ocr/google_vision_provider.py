@@ -1,15 +1,19 @@
+import json
+import os
+import re
+import logging
+
 from google.cloud import vision
 from typing import List, Dict, Any
 from decimal import Decimal
 
 from config import setup_logging
 from utils.helpers import normalize_date
-from provider_interfaces import LineItem, OCRProvider, OCRResponse
-import json
-import os
-import re
-import logging
+from provider_interfaces import OCRProvider, OCRResponse
+from receipt_schemas import ReceiptItem
+
 from google.oauth2 import service_account
+
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -178,11 +182,12 @@ class GoogleVisionProvider(OCRProvider):
                 try:
                     price = Decimal(item_match.group(2))
                     if len(item_name) > 2 and price > 0:
-                        items.append(LineItem(
+                        items.append(ReceiptItem(
                             name=item_name,
-                            price=price,
-                            quantity=1,
-                            category=self._categorize_item(item_name)
+                            price=Decimal(price),
+                            quantity=Decimal('1'),
+                            category=self._categorize_item(item_name),
+                            discount=Decimal('0')
                         ))
                 except:
                     pass

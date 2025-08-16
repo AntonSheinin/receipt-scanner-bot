@@ -45,25 +45,6 @@ def convert_decimals_to_floats(obj: Any) -> Any:
 
     return obj
 
-def safe_float(value: Any) -> float:
-    """Safely convert value to float"""
-    try:
-        return float(value) if value is not None else 0.0
-    except (ValueError, TypeError):
-        return 0.0
-
-def safe_int(value: Any) -> int:
-    """Safely convert value to int"""
-    try:
-        return int(value) if value is not None else 1
-    except (ValueError, TypeError):
-        return 1
-
-def safe_string_value(value: Any, default: str) -> str:
-    if value and isinstance(value, str) and value.strip():
-        return value.strip()
-    return default
-
 def normalize_date(date_str: str) -> Optional[str]:
         """Normalize date to YYYY-MM-DD format"""
         if not date_str:
