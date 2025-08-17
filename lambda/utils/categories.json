@@ -1,0 +1,430 @@
+{
+  "categories": [
+    {
+      "name": "Food",
+      "code": "food",
+      "description": "All types of food products sold in stores",
+      "subcategories": [
+        {
+          "name": "Meat & Poultry",
+          "code": "meat_poultry",
+          "description": "Fresh raw meat and poultry products",
+          "sample_keywords": ["beef", "chicken", "turkey", "veal", "poultry"]
+        },
+        {
+          "name": "Frozen Meat & Poultry",
+          "code": "frozen_meat_poultry",
+          "description": "Frozen meat and poultry products",
+          "sample_keywords": ["frozen chicken", "frozen beef", "frozen turkey", "frozen meat"]
+        },
+        {
+          "name": "Processed Meats & Sausages",
+          "code": "processed_meats_sausages",
+          "description": "Sausages, pastrami, salami, and other processed meats",
+          "sample_keywords": ["pastrami", "salami", "hot dog", "sausage", "bologna"]
+        },
+        {
+          "name": "Fish & Seafood",
+          "code": "fish_seafood",
+          "description": "Fresh or frozen fish and seafood products",
+          "sample_keywords": ["salmon", "tuna", "shrimp", "sardine", "fish"]
+        },
+        {
+          "name": "Dairy & Eggs",
+          "code": "dairy_eggs",
+          "description": "Milk, cheese, yogurt, eggs and related products",
+          "sample_keywords": ["milk", "cheese", "yogurt", "eggs", "cream"]
+        },
+        {
+          "name": "Bread & Bakery",
+          "code": "bread_bakery",
+          "description": "Bread, rolls, pastries and bakery items",
+          "sample_keywords": ["bread", "bagel", "roll", "croissant", "bun"]
+        },
+        {
+          "name": "Fruits & Vegetables",
+          "code": "fruits_vegetables",
+          "description": "Fresh fruits and vegetables, seasonal or packaged",
+          "sample_keywords": ["apple", "banana", "tomato", "carrot", "lettuce"]
+        },
+        {
+          "name": "Frozen Food",
+          "code": "frozen_food",
+          "description": "Frozen vegetables, ready meals, desserts and ice cream",
+          "sample_keywords": ["frozen vegetables", "ice cream", "frozen pizza", "dumplings", "fish sticks"]
+        },
+        {
+          "name": "Dry Goods & Cooking Essentials",
+          "code": "dry_goods",
+          "description": "Rice, pasta, flour, sugar, oils, canned and jarred goods",
+          "sample_keywords": ["rice", "pasta", "flour", "sugar", "canned beans"]
+        },
+        {
+          "name": "Snacks & Confectionery",
+          "code": "snacks_confectionery",
+          "description": "Chips, chocolates, candy, biscuits and other snacks",
+          "sample_keywords": ["chocolate", "candy", "chips", "biscuits", "cookies"]
+        },
+        {
+          "name": "Ready Meals & Deli",
+          "code": "ready_meals_deli",
+          "description": "Prepared meals, salads, sandwiches and deli meats",
+          "sample_keywords": ["sandwich", "salad", "prepared meal", "deli meat", "rotisserie chicken"]
+        },
+        {
+          "name": "Baby Food",
+          "code": "baby_food",
+          "description": "Food specifically for babies and infants",
+          "sample_keywords": ["baby formula", "baby cereal", "puree", "baby snacks"]
+        }
+      ]
+    },
+    {
+      "name": "Beverages",
+      "code": "beverages",
+      "description": "All types of drinks, including alcoholic and non-alcoholic",
+      "subcategories": [
+        {
+          "name": "Water",
+          "code": "water",
+          "description": "Mineral, spring, still or bottled water",
+          "sample_keywords": ["mineral water", "spring water", "still water", "bottled water"]
+        },
+        {
+          "name": "Soft Drinks",
+          "code": "soft_drinks",
+          "description": "Non-alcoholic carbonated and non-carbonated beverages",
+          "sample_keywords": ["cola", "soda", "lemonade", "juice", "fizzy drink"]
+        },
+        {
+          "name": "Coffee & Tea",
+          "code": "coffee_tea",
+          "description": "Coffee beans, ground coffee, instant coffee, tea bags and herbal teas",
+          "sample_keywords": ["coffee beans", "ground coffee", "instant coffee", "tea bags", "herbal tea"]
+        },
+        {
+          "name": "Hot Chocolate & Cocoa Drinks",
+          "code": "cocoa_drinks",
+          "description": "Hot chocolate and cocoa-based drinks",
+          "sample_keywords": ["hot chocolate", "cocoa powder", "cocoa drink", "chocolate drink"]
+        },
+        {
+          "name": "Alcoholic Beverages",
+          "code": "alcohol",
+          "description": "Beer, wine, spirits and other alcoholic drinks",
+          "sample_keywords": ["beer", "wine", "vodka", "whiskey", "rum"]
+        },
+        {
+          "name": "Dairy Drinks",
+          "code": "dairy_drinks",
+          "description": "Milk-based drinks and yogurt beverages",
+          "sample_keywords": ["chocolate milk", "yogurt drink", "milkshake", "lassi"]
+        },
+        {
+          "name": "Energy & Sports Drinks",
+          "code": "energy_sports",
+          "description": "Energy drinks and isotonic sports beverages",
+          "sample_keywords": ["energy drink", "sports drink", "isotonic beverage", "powerade"]
+        }
+      ]
+    },
+    {
+      "name": "Pets",
+      "code": "pets",
+      "description": "Pet food, accessories, and veterinary services",
+      "subcategories": [
+        {
+          "name": "Pet Food",
+          "code": "pet_food",
+          "description": "Food for pets like dogs, cats, and other animals",
+          "sample_keywords": ["dog food", "cat food", "pet treats", "kibble"]
+        },
+        {
+          "name": "Pet Accessories",
+          "code": "pet_accessories",
+          "description": "Toys, collars, leashes, cages and litter products",
+          "sample_keywords": ["toy", "leash", "cage", "collar", "litter"]
+        },
+        {
+          "name": "Veterinary Services",
+          "code": "veterinary_services",
+          "description": "Vet visits, vaccinations, and medical care for pets",
+          "sample_keywords": ["vet visit", "vaccination", "pet surgery", "checkup", "pet medicine"]
+        }
+      ]
+    },
+    {
+      "name": "Household",
+      "code": "household",
+      "description": "Household cleaning, paper, kitchen and maintenance products",
+      "subcategories": [
+        {
+          "name": "Cleaning Supplies",
+          "code": "cleaning_supplies",
+          "description": "Detergents, soaps, disinfectants and other cleaning products",
+          "sample_keywords": ["detergent", "dish soap", "floor cleaner", "bleach", "disinfectant"]
+        },
+        {
+          "name": "Paper & Disposable Products",
+          "code": "paper_disposable",
+          "description": "Toilet paper, paper towels, napkins and disposable kitchenware",
+          "sample_keywords": ["toilet paper", "paper towels", "napkins", "disposable cups", "plates"]
+        },
+        {
+          "name": "Kitchenware & Storage",
+          "code": "kitchenware_storage",
+          "description": "Plastic wrap, foil, containers and food storage items",
+          "sample_keywords": ["plastic wrap", "aluminum foil", "food container", "storage bag"]
+        },
+        {
+          "name": "Home Maintenance",
+          "code": "home_maintenance",
+          "description": "Batteries, light bulbs, basic tools and repair supplies",
+          "sample_keywords": ["light bulb", "battery", "screwdriver", "nails", "glue"]
+        }
+      ]
+    },
+    {
+      "name": "Personal Care",
+      "code": "personal_care",
+      "description": "Hygiene, cosmetics, baby care and health products",
+      "subcategories": [
+        {
+          "name": "Hygiene",
+          "code": "hygiene",
+          "description": "Soap, shampoo, toothpaste, deodorant, razors",
+          "sample_keywords": ["soap", "shampoo", "toothpaste", "deodorant", "razor"]
+        },
+        {
+          "name": "Cosmetics & Beauty",
+          "code": "cosmetics_beauty",
+          "description": "Cosmetic and beauty products like lipstick, foundation, creams",
+          "sample_keywords": ["lipstick", "foundation", "perfume", "cream", "mascara"]
+        },
+        {
+          "name": "Baby Care",
+          "code": "baby_care",
+          "description": "Diapers, wipes, baby lotions and baby shampoos",
+          "sample_keywords": ["diapers", "baby wipes", "baby lotion", "baby shampoo"]
+        },
+        {
+          "name": "Health & Wellness",
+          "code": "health_wellness",
+          "description": "Vitamins and wellness supplements (non-drug)",
+          "sample_keywords": ["vitamins", "supplements", "omega 3"]
+        }
+      ]
+    },
+    {
+      "name": "Electronics",
+      "code": "electronics",
+      "description": "Computers, phones, home electronics, printers, and small appliances",
+      "subcategories": [
+        {
+          "name": "Computers & Tablets",
+          "code": "computers_tablets",
+          "description": "Laptops, desktops, tablets and related devices",
+          "sample_keywords": ["laptop", "tablet", "desktop", "iPad"]
+        },
+        {
+          "name": "Mobile Phones",
+          "code": "mobile_phones",
+          "description": "Smartphones and cell phones",
+          "sample_keywords": ["smartphone", "iPhone", "Android", "cell phone"]
+        },
+        {
+          "name": "Accessories",
+          "code": "electronics_accessories",
+          "description": "Chargers, cables, headphones, cases and power banks",
+          "sample_keywords": ["charger", "USB cable", "headphones", "phone case", "power bank"]
+        },
+        {
+          "name": "Printers & Office Equipment",
+          "code": "printers_office",
+          "description": "Printers, scanners, ink cartridges and related equipment",
+          "sample_keywords": ["printer", "scanner", "ink cartridge", "paper tray"]
+        },
+        {
+          "name": "Home Electronics",
+          "code": "home_electronics",
+          "description": "TVs, cameras, smart home devices and audio systems",
+          "sample_keywords": ["TV", "camera", "speaker", "smart home device", "audio system"]
+        },
+        {
+          "name": "Small Appliances",
+          "code": "small_appliances",
+          "description": "Kitchen and personal small appliances like kettle, toaster, blender",
+          "sample_keywords": ["toaster", "kettle", "blender", "mixer", "hairdryer"]
+        }
+      ]
+    },
+    {
+      "name": "Clothing & Footwear",
+      "code": "clothing_footwear",
+      "description": "Clothing, footwear and accessories for men, women and children",
+      "subcategories": [
+        {
+          "name": "Men’s Clothing",
+          "code": "mens_clothing",
+          "description": "Clothing items for men",
+          "sample_keywords": ["shirt", "pants", "jacket", "sweater", "t-shirt"]
+        },
+        {
+          "name": "Women’s Clothing",
+          "code": "womens_clothing",
+          "description": "Clothing items for women",
+          "sample_keywords": ["dress", "blouse", "skirt", "jacket", "cardigan"]
+        },
+        {
+          "name": "Children’s Clothing",
+          "code": "childrens_clothing",
+          "description": "Clothing items for children",
+          "sample_keywords": ["baby onesie", "kids t-shirt", "pants", "jacket"]
+        },
+        {
+          "name": "Footwear",
+          "code": "footwear",
+          "description": "Shoes, boots, sandals and sneakers",
+          "sample_keywords": ["sneakers", "boots", "sandals", "heels", "loafers"]
+        },
+        {
+          "name": "Accessories",
+          "code": "clothing_accessories",
+          "description": "Hats, belts, scarves, bags, gloves, ties",
+          "sample_keywords": ["hat", "belt", "scarf", "bag", "gloves"]
+        },
+        {
+          "name": "Underwear & Socks",
+          "code": "underwear_socks",
+          "description": "Underwear, bras, boxers, panties and socks",
+          "sample_keywords": ["underwear", "boxers", "bra", "socks", "panties"]
+        }
+      ]
+    },
+    {
+      "name": "Car & Transportation",
+      "code": "car_transportation",
+      "description": "Fuel, car services and car accessories",
+      "subcategories": [
+        {
+          "name": "Fuel & Electric",
+          "code": "fuel_electric",
+          "description": "Gasoline, diesel, and electric charging",
+          "sample_keywords": ["gasoline", "diesel", "EV charging", "electric charge", "petrol", "octan"]
+        },
+        {
+          "name": "Car Services",
+          "code": "car_services",
+          "description": "Repairs, car wash, inspection, maintenance",
+          "sample_keywords": ["car wash", "repair", "inspection", "parking", "maintenance"]
+        },
+        {
+          "name": "Car Accessories",
+          "code": "car_accessories",
+          "description": "Floor mats, wipers, seat covers, phone holders",
+          "sample_keywords": ["wiper", "floor mat", "seat cover", "phone holder", "air freshener"]
+        }
+      ]
+    },
+    {
+      "name": "Home & Furniture",
+      "code": "home_furniture",
+      "description": "Furniture, home textiles, decor, garden and outdoor products",
+      "subcategories": [
+        {
+          "name": "Furniture",
+          "code": "furniture",
+          "description": "Tables, chairs, beds, cabinets and sofas",
+          "sample_keywords": ["sofa", "chair", "table", "bed", "cabinet"]
+        },
+        {
+          "name": "Home Textiles",
+          "code": "home_textiles",
+          "description": "Bedsheets, towels, curtains, blankets and pillows",
+          "sample_keywords": ["bedsheet", "towel", "curtain", "blanket", "pillow"]
+        },
+        {
+          "name": "Decor",
+          "code": "decor",
+          "description": "Lamps, carpets, vases, picture frames and mirrors",
+          "sample_keywords": ["lamp", "carpet", "vase", "picture frame", "mirror"]
+        },
+        {
+          "name": "Garden & Outdoor",
+          "code": "garden_outdoor",
+          "description": "Garden furniture, tools and outdoor accessories",
+          "sample_keywords": ["garden chair", "grill", "plant pot", "watering can"]
+        }
+      ]
+    },
+    {
+      "name": "Stationery & Books",
+      "code": "stationery_books",
+      "description": "Office supplies, books and magazines",
+      "subcategories": [
+        {
+          "name": "Office Supplies",
+          "code": "office_supplies",
+          "description": "Pens, staplers, paper and folders",
+          "sample_keywords": ["pen", "paper", "stapler", "file folder"]
+        },
+        {
+          "name": "Books & Magazines",
+          "code": "books_magazines",
+          "description": "Printed books, novels, magazines, comics and textbooks",
+          "sample_keywords": ["novel", "magazine", "comic", "dictionary", "textbook"]
+        }
+      ]
+    },
+    {
+      "name": "Entertainment & Leisure",
+      "code": "entertainment_leisure",
+      "description": "Toys, games, sports, and event tickets",
+      "subcategories": [
+        {
+          "name": "Toys & Games",
+          "code": "toys_games",
+          "description": "Toys, puzzles, board games, dolls and action figures",
+          "sample_keywords": ["lego", "puzzle", "board game", "doll", "action figure"]
+        },
+        {
+          "name": "Sporting Goods",
+          "code": "sporting_goods",
+          "description": "Sports equipment and fitness accessories",
+          "sample_keywords": ["tennis racket", "soccer ball", "yoga mat", "dumbbell"]
+        },
+        {
+          "name": "Events & Tickets",
+          "code": "events_tickets",
+          "description": "Tickets for concerts, theater, cinema and sports events",
+          "sample_keywords": ["concert ticket", "theater ticket", "cinema ticket", "sport event"]
+        }
+      ]
+    },
+    {
+      "name": "Pharmacy & Medical",
+      "code": "pharmacy_medical",
+      "description": "Prescription and OTC medicines, medical supplies",
+      "subcategories": [
+        {
+          "name": "Prescription Medicines",
+          "code": "prescription_medicines",
+          "description": "Medicines requiring a prescription",
+          "sample_keywords": ["antibiotic", "insulin", "inhaler", "prescription drug"]
+        },
+        {
+          "name": "OTC Medicines",
+          "code": "otc_medicines",
+          "description": "Over-the-counter medicines and supplements",
+          "sample_keywords": ["pain reliever", "cough syrup", "allergy medicine", "vitamin"]
+        },
+        {
+          "name": "Medical Supplies",
+          "code": "medical_supplies",
+          "description": "Medical equipment and supplies like bandages, thermometers",
+          "sample_keywords": ["bandage", "thermometer", "syringe", "crutches", "mask"]
+        }
+      ]
+    }
+  ]
+}

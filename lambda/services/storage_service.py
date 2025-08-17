@@ -9,6 +9,7 @@ from provider_factory import ProviderFactory
 from receipt_schemas import ReceiptData
 from pydantic import ValidationError
 
+
 setup_logging()
 logger = logging.getLogger(__name__)
 
