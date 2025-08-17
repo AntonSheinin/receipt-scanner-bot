@@ -1,6 +1,12 @@
 from datetime import datetime, timezone, timedelta
 from typing import Dict
 import json
+import logging
+from config import category_manager, setup_logging
+
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 class PromptManager:
     def __init__(self, locale: str = "he_IL"):
@@ -32,6 +38,9 @@ class PromptManager:
         Generate the prompt for receipt analysis using LLM.
         Enhanced for Israeli/Hebrew receipts.
         """
+
+        taxonomy_json = category_manager.get_taxonomy_json_for_llm()
+
         return """Analyze this ISRAELI receipt image (קבלה or חשבונית מס) carefully and extract structured data. Think through the analysis step-by-step internally:
 
 - First examine the overall layout - Israeli receipts typically have Hebrew text right-to-left
@@ -45,6 +54,8 @@ class PromptManager:
 - Cross-reference individual items with the total amount (סה"כ, סיכום, total)
 - Preserve Hebrew text properly without escaping to Unicode
 
+Available categories/subcategories taxonomy (use subcategory codes for items): {taxonomy_json}
+
 Extract the following information in valid JSON format ONLY (no additional text or explanations):
 
 {
@@ -57,7 +68,7 @@ Extract the following information in valid JSON format ONLY (no additional text 
             "name": "item name (preserve Hebrew characters properly)",
             "price": "item price as decimal number (original price as shown on receipt)",
             "quantity": "quantity as integer",
-            "category": "food/beverages/household/electronics/clothing/pharmacy/other (if identifiable)",
+            "subcategory": "subcategory code from the taxonomy json above",
             "discount": "discount amount as negative decimal number, or 0 if no discount"
         }
     ],
@@ -72,6 +83,17 @@ Israeli Receipt Specific Rules:
 - Common quantity abbreviations: יח' (units), ק"ג (kg), גרם (grams), ליטר (liter)
 - Store loyalty cards: מועדון, חבר מועדון, כרטיס אשראי מועדון
 - Receipt types: חשבונית מס (tax invoice), קבלה (receipt), חשבונית מס קבלה
+
+CRITICAL SUBCATEGORY RULES:
+- ALWAYS use the exact subcategory "code" from the taxonomy above
+- Choose the most specific subcategory that matches the item
+- For meat items: use "meat_poultry", "frozen_meat_poultry", or "processed_meats_sausages"
+- For dairy: use "dairy_eggs"
+- For bread: use "bread_bakery"
+- For vegetables/fruits: use "fruits_vegetables"
+- For cleaning: use "cleaning_supplies"
+- For fuel/gas: use "fuel_electric"
+- If uncertain, use the most general subcategory within the appropriate main category
 
 CRITICAL DATE PARSING RULES:
 - Israeli receipts use DD/MM/YYYY or DD/MM/YY format
@@ -146,6 +168,8 @@ Return ONLY valid JSON with all required fields, no explanations.
         current_month = current_date.strftime('%Y-%m')
         last_month = (current_date.replace(day=1) - timedelta(days=1)).strftime('%Y-%m')
 
+        taxonomy_json = category_manager.get_taxonomy_json_for_llm()
+
         return f"""Analyze this user question about their stored receipts and generate a query plan.
 
 IMPORTANT: All receipts are Israeli receipts with Hebrew text. When generating item_keywords,
@@ -155,10 +179,19 @@ Current date: {current_date.strftime('%Y-%m-%d')}
 Current month: {current_month}
 Last month: {last_month}
 
+Available categories/subcategories codes taxonomy (use subcategory codes for items): {taxonomy_json}
+
 User question: "{question}"
 
 Available filter fields (only include if relevant):
 - "item_keywords": ["keyword1", "keyword2"] - MUST be in Hebrew since receipts are Hebrew
+- "categories": ["category"] - main categories codes from taxonomy json above like food, beverages, household etc.
+- "subcategories": ["subcategory"] - specific subcategories codes from taxonomy json above for precise filtering
+- "date_range": {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}}
+- "store_names": ["store1", "store2"]
+- "price_range": {{"min": 10, "max": 100}}
+- "payment_methods": ["cash", "credit_card", "other"]
+- "limit": 1
 
 Generate a JSON query plan with this structure - ONLY include fields that are actually needed:
 {{
@@ -167,7 +200,30 @@ Generate a JSON query plan with this structure - ONLY include fields that are ac
     "sort_by": "upload_date_desc"
 }}
 
-[... rest of existing prompt logic ...]
+Available aggregations:
+- "sum_total" - total spending
+- "sum_by_category" - spending by category/subcategory
+- "min_price_by_store" - cheapest price by store
+- "max_price_by_store" - most expensive price by store
+- "count_receipts" - count receipts (use for "show me" queries)
+
+Available sort options:
+- "upload_date_desc" - most recently uploaded first
+- "upload_date_asc" - oldest uploaded first
+- "receipt_date_desc" - most recent purchase date first
+- "receipt_date_asc" - oldest purchase date first
+- "total_desc" - highest amount first
+- "total_asc" - lowest amount first
+
+Rules:
+- Use "subcategories" codes from taxonomy json for specific items (like "meat_poultry", "dairy_eggs")
+- Use "categories" codes from taxonomy json for broader queries (like "food", "household")
+- For "latest/last uploaded" queries, use sort_by: "upload_date_desc"
+- For "most recent purchase" queries, use sort_by: "receipt_date_desc"
+- For "show me" or "what is" queries, use aggregation: "count_receipts"
+- DO NOT include fields with null values - omit them completely
+- DO NOT include empty arrays - omit them completely
+- Only set limit when you want to restrict results (1-10)
 
 CRITICAL: Return keywords in Hebrew characters, not Russian or English.
 
@@ -177,8 +233,7 @@ Examples (but not all the possible Hebrew keywords):
 - For household: ["סבון", "חומרי ניקוי", "נייר טואלט"]
 
 CRITICAL: Return ONLY the JSON object. Do not include null values or empty arrays.
-Don't include any explanations or comments.
-"""
+Don't include any explanations or comments."""
 
     @staticmethod
     def get_response_generation_prompt(question: str, results: Dict) -> str:
@@ -205,16 +260,21 @@ Format for Telegram with **bold** text and emojis. Keep it concise but informati
 
     @staticmethod
     def get_hebrew_structure_ocr_text_prompt(ocr_text: str) -> str:
+
+        taxonomy_json = category_manager.get_taxonomy_json_for_llm()
+
         return f"""You are provided with OCR-extracted text from an ISRAELI receipt (קבלה). Structure this text into JSON format.
 
 OCR Text:
 {ocr_text}
 
+Available categories/subcategories taxonomy (use subcategory codes for items): {taxonomy_json}
+
 Extract the following information in valid JSON format ONLY:
 
 {{
     "store_name": "name of the store/business",
-    "date": "date in YYYY-MM-DD format",
+    "date": "date in DD/MM/YYYY format",
     "receipt_number": "receipt/transaction number if available",
     "payment_method": "cash|credit_card|other",
     "items": [
@@ -222,7 +282,7 @@ Extract the following information in valid JSON format ONLY:
             "name": "item name",
             "price": "item price as decimal number (original price as shown)",
             "quantity": "quantity as integer",
-            "category": "food/beverages/household/electronics/clothing/pharmacy/other",
+            "subcategory": "subcategory code from the taxonomy json above",
             "discount": "discount amount as negative decimal number, or 0 if no discount"
         }}
     ],
@@ -235,6 +295,17 @@ Israeli Receipt Specific Patterns:
 - VAT/Tax (מע"מ): Skip this line - it's not an item
 - Deposit (פיקדון): Include as separate item with "deposit" category
 - Quantity units: יח', ק"ג, גרם, ליטר, מ"ל
+
+CRITICAL SUBCATEGORY RULES:
+- ALWAYS use the exact subcategory "code" from the taxonomy above
+- Choose the most specific subcategory that matches the item
+- For meat items: use "meat_poultry", "frozen_meat_poultry", or "processed_meats_sausages"
+- For dairy: use "dairy_eggs"
+- For bread: use "bread_bakery"
+- For vegetables/fruits: use "fruits_vegetables"
+- For cleaning: use "cleaning_supplies"
+- For fuel/gas: use "fuel_electric"
+- If uncertain, use the most general subcategory within the appropriate main category
 
 CRITICAL DATE PARSING RULES:
 - Israeli receipts use DD/MM/YYYY or DD/MM/YY format
@@ -305,63 +376,3 @@ If any required field is missing or invalid, the analysis fails completely.
 
 Return ONLY valid JSON with all required fields, no explanations.
 """
-
-    @staticmethod
-    def get_generate_query_plan_prompt(question: str):
-        current_date = datetime.now(timezone.utc)
-        current_month = current_date.strftime('%Y-%m')
-        last_month = (current_date.replace(day=1) - timedelta(days=1)).strftime('%Y-%m')
-
-        return f"""Analyze this user question about their stored receipts and generate a query plan.
-
-Current date: {current_date.strftime('%Y-%m-%d')}
-Current month: {current_month}
-Last month: {last_month}
-
-User question: "{question}"
-
-Generate a JSON query plan with this structure - ONLY include fields that are actually needed:
-{{
-    "filter": {{}},
-    "aggregation": "count_receipts",
-    "sort_by": "upload_date_desc"
-}}
-
-Available filter fields (only include if relevant):
-- "date_range": {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}}
-- "store_names": ["store1", "store2"]
-- "item_keywords": ["keyword1", "keyword2"]
-- "categories": ["food", "beverages", "household"]
-- "price_range": {{"min": 10, "max": 100}}
-- "payment_methods": ["cash", "credit_card", "other"]
-- "limit": 1
-
-Available aggregations:
-- "sum_total" - total spending
-- "sum_by_category" - spending by category
-- "min_price_by_store" - cheapest price by store
-- "max_price_by_store" - most expensive price by store
-- "count_receipts" - count receipts (use for "show me" queries)
-
-Available sort options:
-- "upload_date_desc" - most recently uploaded first
-- "upload_date_asc" - oldest uploaded first
-- "receipt_date_desc" - most recent purchase date first
-- "receipt_date_asc" - oldest purchase date first
-- "total_desc" - highest amount first
-- "total_asc" - lowest amount first
-
-Rules:
-- For "latest/last uploaded" queries, use sort_by: "upload_date_desc"
-- For "most recent purchase" queries, use sort_by: "receipt_date_desc"
-- For "show me" or "what is" queries, use aggregation: "count_receipts"
-- DO NOT include fields with null values - omit them completely
-- DO NOT include empty arrays - omit them completely
-- Only set limit when you want to restrict results (1-10)
-
-Examples:
-"Last receipt by upload date" → {{"filter": {{"limit": 1}}, "aggregation": "count_receipts", "sort_by": "upload_date_desc"}}
-"How much did I spend on food?" → {{"filter": {{"categories": ["food"]}}, "aggregation": "sum_by_category"}}
-"Show my 3 biggest purchases" → {{"filter": {{"limit": 3}}, "aggregation": "count_receipts", "sort_by": "total_desc"}}
-
-CRITICAL: Return ONLY the JSON object. Do not include null values or empty arrays. Only include relevant fields."""
