@@ -1,13 +1,13 @@
 """
-Storage Service
+    Storage Service module
 """
+
 import logging
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from config import DYNAMODB_TABLE_NAME, setup_logging
 from provider_factory import ProviderFactory
-from receipt_schemas import ReceiptData
-from pydantic import ValidationError
+from receipt_schemas import ReceiptData, ReceiptItem
 
 
 setup_logging()
@@ -71,7 +71,7 @@ class StorageService:
             logger.error(f"Receipt data storage error: {e}")
             return False
 
-    def get_filtered_receipts(self, query_plan: Dict, secure_user_id: str) -> List[ReceiptData]:
+    def get_filtered_receipts(self, query_plan: Dict, secure_user_id: str) -> List[dict]:
         """Get filtered receipts using DocumentStorage provider"""
 
         filter_params = query_plan.get("filter", {})
@@ -91,15 +91,32 @@ class StorageService:
             # Fall back to scanning all user receipts
             receipts = self._scan_user_receipts(secure_user_id)
 
-        # Apply additional filters
+        # Apply additional filters (price range, etc.)
         receipts = self._apply_additional_filters(receipts, filter_params)
 
+        # Convert dict receipts to ReceiptData objects
         pydantic_receipts = []
         for receipt_dict in receipts:
-            # Extract the receipt data from storage format
-            pydantic_receipts.append(ReceiptData(**receipt_dict))
+            try:
+                # Convert items to ReceiptItem objects if they're still dicts
+                if 'items' in receipt_dict and receipt_dict['items']:
+                    receipt_items = []
+                    for item_dict in receipt_dict['items']:
+                        # Ensure backward compatibility for old data without subcategory
+                        if 'subcategory' not in item_dict and 'category' in item_dict:
+                            item_dict['subcategory'] = item_dict['category']
+                        receipt_items.append(ReceiptItem(**item_dict))
+                    receipt_dict['items'] = receipt_items
 
-        logger.info(f"Found {len(pydantic_receipts)} receipts for user {secure_user_id}")
+                # Create ReceiptData object
+                receipt_data = ReceiptData(**receipt_dict)
+                pydantic_receipts.append(receipt_data)
+
+            except Exception as e:
+                logger.error(f"Failed to convert receipt to ReceiptData: {e}")
+                continue
+
+        logger.info(f"Found {len(pydantic_receipts)} receipts for user {secure_user_id[:8]}...")
         return pydantic_receipts
 
     def delete_last_uploaded_receipt(self, secure_user_id: str) -> Optional[Dict]:
@@ -240,7 +257,7 @@ class StorageService:
             logger.error(f"Storage key extraction error: {e}")
             return None
 
-    def _query_by_date_range(self, secure_user_id: str, date_range: Dict) -> List[Dict]:
+    def _query_by_date_range(self, secure_user_id: str, date_range: Dict) -> List[ReceiptData]:
         """Query receipts by date range using storage provider"""
         try:
             start_date = date_range.get("start")
@@ -249,58 +266,74 @@ class StorageService:
             if not start_date or not end_date:
                 return self._scan_user_receipts(secure_user_id)
 
-            return self.receipt_storage.query_by_date_range(
+            raw_receipts = self.receipt_storage.query_by_date_range(
                 table=self.table_name,
                 user_id=secure_user_id,
                 start_date=start_date,
                 end_date=end_date
             )
 
+            return self._convert_to_receipt_data_list(raw_receipts)
+
         except Exception as e:
             logger.error(f"Date range query error: {e}")
-            return self._scan_user_receipts(secure_user_id)
+            return []
 
-    def _query_by_store_names(self, secure_user_id: str, store_names: List[str]) -> List[Dict]:
+    def _query_by_store_names(self, secure_user_id: str, store_names: List[str]) -> List[ReceiptData]:
         """Query receipts by store names using storage provider"""
         try:
-            return self.receipt_storage.query_by_stores(
+
+            if not store_names:
+                return self._scan_user_receipts(secure_user_id)
+
+            raw_receipts = self.receipt_storage.query_by_stores(
                 table=self.table_name,
                 user_id=secure_user_id,
                 store_names=store_names
             )
 
+            return self._convert_to_receipt_data_list(raw_receipts)
+
         except Exception as e:
             logger.error(f"Store name query error: {e}")
             return self._scan_user_receipts(secure_user_id)
 
-    def _query_by_payment_methods(self, secure_user_id: str, payment_methods: List[str]) -> List[Dict]:
+    def _query_by_payment_methods(self, secure_user_id: str, payment_methods: List[str]) -> List[ReceiptData]:
         """Query receipts by payment methods using storage provider"""
         try:
-            return self.receipt_storage.query_by_payment_methods(
+
+            if not payment_methods:
+                return self._scan_user_receipts(secure_user_id)
+
+            raw_receipts = self.receipt_storage.query_by_payment_methods(
                 table=self.table_name,
-                user_id=str(secure_user_id),  # Ensure string
+                user_id=secure_user_id,
                 payment_methods=payment_methods
             )
+
+            return self._convert_to_receipt_data_list(raw_receipts)
 
         except Exception as e:
             logger.error(f"Payment method query error: {e}")
             return self._scan_user_receipts(secure_user_id)
 
-    def _scan_user_receipts(self, secure_user_id: str) -> List[Dict]:
+    def _scan_user_receipts(self, secure_user_id: str) -> List[ReceiptData]:
         """Scan all receipts for a user using storage provider"""
         try:
-            return self.receipt_storage.query_user_receipts(
+
+            raw_receipts = self.receipt_storage.query_user_receipts(
                 table=self.table_name,
                 user_id=secure_user_id
             )
+
+            return self._convert_to_receipt_data_list(raw_receipts)
 
         except Exception as e:
             logger.error(f"User receipts scan error: {e}")
             return []
 
-    def _apply_additional_filters(self, receipts: List[Dict], filters: Dict) -> List[Dict]:
+    def _apply_additional_filters(self, receipts: List[ReceiptData], filters: Dict) -> List[ReceiptData]:
         """Apply additional filters to receipts"""
-        # Keep your existing implementation
         try:
             filtered_receipts = receipts
 
@@ -316,7 +349,7 @@ class StorageService:
 
                         filtered_receipts = [
                             receipt for receipt in filtered_receipts
-                            if min_price <= float(receipt.get('total', 0)) <= max_price
+                            if min_price <= float(receipt.total) <= max_price
                         ]
                     except (ValueError, TypeError) as e:
                         logger.warning(f"Invalid price range values: {price_range}, error: {e}")
@@ -342,3 +375,43 @@ class StorageService:
         except Exception as e:
             logger.error(f"raw image delete error: {e}")
             return False
+
+    def _convert_to_receipt_data_list(self, receipt_dicts: List[Dict[str, Any]]) -> List[ReceiptData]:
+        """Convert list of receipt dictionaries to ReceiptData objects"""
+        receipt_data_list = []
+
+        for receipt_dict in receipt_dicts:
+            try:
+                receipt_data = self._convert_dict_to_receipt_data(receipt_dict)
+                if receipt_data:
+                    receipt_data_list.append(receipt_data)
+            except Exception as e:
+                logger.error(f"Failed to convert receipt dict to ReceiptData: {e}")
+                continue
+
+        return receipt_data_list
+
+    def _convert_dict_to_receipt_data(self, receipt_dict: Dict[str, Any]) -> Optional[ReceiptData]:
+        """Convert single receipt dictionary to ReceiptData object"""
+        try:
+            # Convert items to ReceiptItem objects if they exist
+            if 'items' in receipt_dict and receipt_dict['items']:
+                receipt_items = []
+                for item_dict in receipt_dict['items']:
+                    # Handle backward compatibility
+                    if 'subcategory' not in item_dict and 'category' in item_dict:
+                        item_dict['subcategory'] = item_dict['category']
+
+                    receipt_item = ReceiptItem(**item_dict)
+                    receipt_items.append(receipt_item)
+
+                receipt_dict['items'] = receipt_items
+            else:
+                receipt_dict['items'] = []
+
+            return ReceiptData(**receipt_dict)
+
+        except Exception as e:
+            logger.error(f"Failed to convert receipt dict to ReceiptData: {e}")
+            return None
+

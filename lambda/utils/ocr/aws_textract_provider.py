@@ -1,3 +1,7 @@
+"""
+    AWS Textract Provider module
+"""
+
 import boto3
 import logging
 from decimal import Decimal, InvalidOperation
@@ -5,9 +9,10 @@ from typing import Optional, List, Dict, Any
 from utils.helpers import normalize_date
 from botocore.exceptions import ClientError
 from config import setup_logging, AWS_REGION
-
+from utils.category_manager import category_manager
 from provider_interfaces import OCRProvider, OCRResponse
 from receipt_schemas import ReceiptItem
+
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -127,6 +132,7 @@ class TextractProvider(OCRProvider):
 
         return summary
 
+    # TODO : Implement converting extracted LineItem into ReceiptItem
     def _extract_line_items(self, expense_doc: Dict[str, Any]) -> List[ReceiptItem]:
         """Extract line items from expense document"""
         items = []
@@ -141,21 +147,28 @@ class TextractProvider(OCRProvider):
 
                     if field_type == 'item':
                         item_data['name'] = value
-
                     elif field_type == 'price':
                         item_data['price'] = self._parse_amount(value)
-
                     elif field_type == 'quantity':
                         item_data['quantity'] = self._parse_quantity(value)
 
                 if item_data.get('name'):
-                    items.append(ReceiptItem(
-                        name=item_data['name'],
-                        price=Decimal(item_data.get('price', 0)),
-                        quantity=Decimal(item_data.get('quantity', 1)),
-                        category='other',
-                        discount=Decimal(item_data.get('discount', 0)),
-                    ))
+                    subcategory = self._categorize_item_to_subcategory(item_data['name'])
+                    category = category_manager.get_category_from_subcategory(subcategory)
+
+                    try:
+                        receipt_item = ReceiptItem(
+                            name=item_data['name'],
+                            price=Decimal(item_data.get('price', 0)),
+                            quantity=Decimal(item_data.get('quantity', 1)),
+                            category=category,
+                            subcategory=subcategory,
+                            discount=Decimal(0)
+                        )
+                        items.append(receipt_item)
+                    except Exception as e:
+                        logger.warning(f"Failed to create ReceiptItem: {e}")
+                        continue
 
         return items
 
@@ -245,3 +258,7 @@ class TextractProvider(OCRProvider):
         except Exception as e:
             logger.error(f"Error extracting raw text from blocks: {e}")
             return ""
+
+    # TODO : implement
+    def _categorize_item_to_subcategory(self, item_name: str) -> str:
+        return ""

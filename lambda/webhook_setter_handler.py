@@ -8,6 +8,7 @@ import urllib3
 from services.telegram_service import TelegramService
 from config import setup_logging
 
+
 setup_logging()
 logger = logging.getLogger(__name__)
 

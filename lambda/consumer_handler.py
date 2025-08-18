@@ -1,12 +1,13 @@
 """
-Consumer Lambda - Processes SQS Messages via Orchestration Service
+    Consumer Lambda - Processes SQS Messages via Orchestration Service
 """
+
 import json
 import logging
 from typing import Dict, Any
-
 from config import setup_logging
 from services.orchestrator_service import OrchestratorService
+
 
 setup_logging()
 logger = logging.getLogger(__name__)

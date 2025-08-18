@@ -1,6 +1,7 @@
 """
-Configuration and Constants
+    Configuration and Constants
 """
+
 import os
 import logging
 import boto3

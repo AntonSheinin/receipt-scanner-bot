@@ -1,9 +1,14 @@
+"""
+    DynamoDB Storage Provider module
+"""
+
 import logging
 from typing import Optional, Dict, List, Any
 from boto3.dynamodb.conditions import Key, Attr
 from provider_interfaces import DocumentStorage
 from config import get_dynamodb, setup_logging
 from utils.helpers import convert_floats_to_decimals, convert_decimals_to_floats
+
 
 setup_logging()
 logger = logging.getLogger(__name__)

@@ -1,9 +1,13 @@
-# lambda/services/message_queue_service.py - UPDATED
+"""
+    Message Queue Service module
+"""
+
 import json
 import logging
 from typing import Dict, Any
 from datetime import datetime, timezone
 from config import get_sqs_client, SQS_QUEUE_URL, setup_logging
+
 
 setup_logging()
 logger = logging.getLogger(__name__)

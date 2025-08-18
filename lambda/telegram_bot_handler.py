@@ -1,15 +1,15 @@
 """
-Producer Lambda - Telegram Webhook Handler
+    Producer Lambda - Telegram Webhook Handler
 """
 
 import json
 import logging
 from typing import Dict, Any, Optional
-
 from config import setup_logging
 from services.telegram_service import TelegramService
 from services.message_queue_service import MessageQueueService
 from utils.helpers import create_response
+
 
 setup_logging()
 logger = logging.getLogger(__name__)

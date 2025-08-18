@@ -1,12 +1,12 @@
 """
-Pydantic schemas for receipt data validation
+    Pydantic schemas for receipt data validation
 """
 
 from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Dict, Any
 from decimal import Decimal, InvalidOperation
-from config.categories import category_manager
-from datetime import datetime
+from utils.category_manager import category_manager
+from datetime import datetime, timedelta
 import re
 import logging
 from config import setup_logging
@@ -201,19 +201,28 @@ class ReceiptData(BaseModel):
 
         # Try to parse various date formats and normalize to YYYY-MM-DD
         date_patterns = [
-            (r'^(\d{4})-(\d{2})-(\d{2})$', '%Y-%m-%d'),  # Already correct
-            (r'^(\d{2})/(\d{2})/(\d{4})$', '%d/%m/%Y'),  # DD/MM/YYYY
-            (r'^(\d{2})\.(\d{2})\.(\d{4})$', '%d.%m.%Y'), # DD.MM.YYYY
-            (r'^(\d{2})-(\d{2})-(\d{4})$', '%d-%m-%Y'),  # DD-MM-YYYY
+            (r'^(\d{4})-(\d{2})-(\d{2})$', '%Y-%m-%d'),     # Already correct
+            (r'^(\d{2})/(\d{2})/(\d{4})$', '%d/%m/%Y'),     # DD/MM/YYYY
+            (r'^(\d{2})\.(\d{2})\.(\d{4})$', '%d.%m.%Y'),   # DD.MM.YYYY
+            (r'^(\d{2})-(\d{2})-(\d{4})$', '%d-%m-%Y'),     # DD-MM-YYYY
+            (r'^(\d{2})/(\d{2})/(\d{2})$', '%d/%m/%y'),     # DD/MM/YY
+            (r'^(\d{2})\.(\d{2})\.(\d{2})$', '%d.%m.%y'),   # DD.MM.YY
         ]
 
-        parsed_date = None
-        normalized_date = None
+        parsed_date: Optional[datetime] = None
+        normalized_date: Optional[str] = None
 
         for pattern, date_format in date_patterns:
             if re.match(pattern, cleaned):
                 try:
                     parsed_date = datetime.strptime(cleaned, date_format)
+
+                    # Handle 2-digit years - always assume 20XX for Israeli receipts
+                    if parsed_date.year < 100:
+                        parsed_date = parsed_date.replace(year=parsed_date.year + 2000)
+                    elif parsed_date.year < 1950:  # Handle edge case
+                        parsed_date = parsed_date.replace(year=parsed_date.year + 2000)
+
                     normalized_date = parsed_date.strftime('%Y-%m-%d')
                     break
 
@@ -224,14 +233,16 @@ class ReceiptData(BaseModel):
             logger.error(f"Date validation failed: invalid format '{cleaned}'")
             raise ValueError(f"Invalid date format: {cleaned}")
 
-        # Check if date is not more than 6 months from now
-        from datetime import timedelta
-        six_months_ago = datetime.now() - timedelta(days=180)
-        tomorrow = datetime.now() + timedelta(days=1)
+        # Use timezone-aware datetime for consistency
+        from datetime import timezone
+        now = datetime.now(timezone.utc).replace(tzinfo=None)  # Remove timezone for comparison
+        six_months_ago = now - timedelta(days=180)
+        tomorrow = now + timedelta(days=1)
 
         if parsed_date < six_months_ago:
-            logger.error(f"Date validation: receipt date is old (more than 6 months): {normalized_date}")
-            raise ValueError(f"Receipt date is too old (more than 6 months): {normalized_date}")
+            logger.warning(f"Receipt date is old (more than 6 months): {normalized_date}")
+            # Don't fail for old dates - just warn
+            # raise ValueError(f"Receipt date is too old (more than 6 months): {normalized_date}")
 
         if parsed_date > tomorrow:
             logger.error(f"Date validation failed: future date provided: {normalized_date}")
@@ -372,5 +383,46 @@ class ReceiptData(BaseModel):
         if self.receipt_number:
             summary += f" | Ref: {self.receipt_number}"
         return summary
+
+class ReceiptAnalysisResult(BaseModel):
+    """Container for receipt analysis results with metadata"""
+
+    receipt_data: ReceiptData = Field(description="Validated receipt data")
+    raw_text: Optional[str] = Field(default=None, description="Raw OCR text if available")
+    processing_metadata: Optional[Dict[str, Any]] = Field(default=None, description="Processing metadata")
+
+    @classmethod
+    def from_llm_response(cls, llm_data: Dict[str, Any], raw_text: Optional[str] = None,
+                         processing_method: Optional[str] = None) -> 'ReceiptAnalysisResult':
+        """Create validated result from LLM response data"""
+
+        # Convert items to use subcategory field for backward compatibility
+        if 'items' in llm_data and llm_data['items']:
+            for item in llm_data['items']:
+                if 'category' in item and 'subcategory' not in item:
+                    # Map old category to subcategory
+                    item['subcategory'] = item['category']
+
+        receipt_data = ReceiptData(**llm_data)
+
+        metadata = {'processing_method': processing_method} if processing_method else None
+
+        return cls(
+            receipt_data=receipt_data,
+            raw_text=raw_text,
+            processing_metadata=metadata
+        )
+
+    def get_processing_method(self) -> Optional[str]:
+        """Get processing method from metadata"""
+        if self.processing_metadata:
+            return self.processing_metadata.get('processing_method')
+        return None
+
+    def get_confidence(self) -> Optional[float]:
+        """Get OCR confidence from metadata"""
+        if self.processing_metadata:
+            return self.processing_metadata.get('ocr_confidence')
+        return None
 
 

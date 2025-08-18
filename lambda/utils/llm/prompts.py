@@ -1,8 +1,13 @@
+"""
+    Prompt Manager module
+"""
+
 from datetime import datetime, timezone, timedelta
 from typing import Dict
 import json
 import logging
-from config import category_manager, setup_logging
+from config import setup_logging
+from utils.category_manager import category_manager
 
 
 setup_logging()
@@ -41,7 +46,7 @@ class PromptManager:
 
         taxonomy_json = category_manager.get_taxonomy_json_for_llm()
 
-        return """Analyze this ISRAELI receipt image (קבלה or חשבונית מס) carefully and extract structured data. Think through the analysis step-by-step internally:
+        return f"""Analyze this ISRAELI receipt image (קבלה or חשבונית מס) carefully and extract structured data. Think through the analysis step-by-step internally:
 
 - First examine the overall layout - Israeli receipts typically have Hebrew text right-to-left
 - Locate and read all text sections methodically
@@ -69,6 +74,7 @@ Extract the following information in valid JSON format ONLY (no additional text 
             "price": "item price as decimal number (original price as shown on receipt)",
             "quantity": "quantity as integer",
             "subcategory": "subcategory code from the taxonomy json above",
+            "category": "category code of recognized subcategory from the taxonomy json above",
             "discount": "discount amount as negative decimal number, or 0 if no discount"
         }
     ],
@@ -86,7 +92,9 @@ Israeli Receipt Specific Rules:
 
 CRITICAL SUBCATEGORY RULES:
 - ALWAYS use the exact subcategory "code" from the taxonomy above
+- ALWAYS fill the category code that corresponds to the subcategory
 - Choose the most specific subcategory that matches the item
+- Choose the category that corresponds to the subcategory
 - For meat items: use "meat_poultry", "frozen_meat_poultry", or "processed_meats_sausages"
 - For dairy: use "dairy_eggs"
 - For bread: use "bread_bakery"
@@ -283,6 +291,7 @@ Extract the following information in valid JSON format ONLY:
             "price": "item price as decimal number (original price as shown)",
             "quantity": "quantity as integer",
             "subcategory": "subcategory code from the taxonomy json above",
+            "category": "category code of corresponding subcategory",
             "discount": "discount amount as negative decimal number, or 0 if no discount"
         }}
     ],
@@ -298,7 +307,9 @@ Israeli Receipt Specific Patterns:
 
 CRITICAL SUBCATEGORY RULES:
 - ALWAYS use the exact subcategory "code" from the taxonomy above
+- ALWAYS fill the category code that corresponds to the subcategory
 - Choose the most specific subcategory that matches the item
+- Choose the category that corresponds to the subcategory
 - For meat items: use "meat_poultry", "frozen_meat_poultry", or "processed_meats_sausages"
 - For dairy: use "dairy_eggs"
 - For bread: use "bread_bakery"

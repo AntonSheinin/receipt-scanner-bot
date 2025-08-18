@@ -1,12 +1,16 @@
+"""
+    Result Aggregator Service module
+"""
+
 import logging
-from typing import Any, Protocol
+from typing import Any
 from enum import StrEnum
 from dataclasses import dataclass
 from collections import defaultdict
 from receipt_schemas import ReceiptData, ReceiptItem
 from decimal import Decimal
-
 from config import setup_logging
+
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -88,28 +92,33 @@ class ResultAggregatorService:
     def _sum_by_category(self, receipts: list[ReceiptData], filter_params: dict[str, Any]) -> AggregationResult:
         """Category breakdown using defaultdict and comprehensions"""
 
-        logger.info("Calculating total spent by category")
+        logger.info("Calculating total spent by category/subcategory")
 
         categories = filter_params.get("categories", [])
+        subcategories = filter_params.get("subcategories", [])
         category_sums = defaultdict(Decimal)
+        subcategory_sums = defaultdict(Decimal)
 
         for receipt in receipts:
             for item in receipt.items:
-                item_category = item.get('category', 'other')
+                # Check if item matches filters
+                category_match = not categories or item.category in categories
+                subcategory_match = not subcategories or item.subcategory in subcategories
 
-                if categories and not self._category_matches(item_category, categories):
-                    continue
+                if category_match and subcategory_match:
+                    item_total = (item.price * item.quantity) + item.discount
+                    category_sums[item.category] += item_total
+                    subcategory_sums[item.subcategory] += item_total
 
-                item_total = (item.price * item.quantity) + item.discount
-                category_sums[item.category or 'other'] += item_total
-
-                # Convert to float for JSON serialization
-                rounded_sums = {k: float(v) for k, v in category_sums.items()}
+        # Convert to float for JSON serialization
+        category_totals = {k: float(v) for k, v in category_sums.items()}
+        subcategory_totals = {k: float(v) for k, v in subcategory_sums.items()}
 
         return AggregationResult(
             data={
-                "category_totals": rounded_sums,
-                "total_spent": sum(rounded_sums.values()),
+                "category_totals": category_totals,
+                "subcategory_totals": subcategory_totals,
+                "total_spent": sum(category_totals.values()),
                 "receipt_count": len(receipts)
             },
             result_type="category_breakdown"
@@ -122,13 +131,18 @@ class ResultAggregatorService:
 
         keywords = filter_params.get("item_keywords", [])
         categories = filter_params.get("categories", [])
+        subcategories = filter_params.get("subcategories", [])
         store_prices: dict[str, Decimal] = {}
 
         for receipt in receipts:
             store = receipt.store_name
 
-            # Use walrus operator for cleaner logic
-            if matching_prices := [item.price for item in receipt.items if (self._item_matches_criteria(item, keywords, categories) and item.price > 0)]:
+            matching_prices = [
+                item.price for item in receipt.items
+                if (self._item_matches_criteria(item, keywords, categories, subcategories) and item.price > 0)
+            ]
+
+            if matching_prices:
                 current_price = price_func(matching_prices)
                 store_prices[store] = price_func(store_prices[store], current_price) if store in store_prices else current_price
 
@@ -137,6 +151,7 @@ class ResultAggregatorService:
                 "store_prices": {k: float(v) for k, v in store_prices.items()},
                 "keywords": keywords,
                 "categories": categories,
+                "subcategories": subcategories,
                 "comparison_type": price_func.__name__
             },
             result_type="price_comparison"
@@ -181,20 +196,21 @@ class ResultAggregatorService:
             result_type="store_list"
         )
 
-    def _item_matches_criteria(self, item: ReceiptItem, keywords: list[str], categories: list[str]) -> bool:
+    def _item_matches_criteria(self, item: ReceiptItem, keywords: list[str], categories: list[str], subcategories: list[str] = None) -> bool:
         """Check if item matches criteria using all()"""
 
         item_name = item.name.lower()
-        item_category = (item.category or '').lower()
 
         keyword_match = not keywords or any(keyword.lower() in item_name for keyword in keywords)
+        category_match = not categories or item.category in categories
+        subcategory_match = not subcategories or item.subcategory in subcategories
 
-        category_match = not categories or self._category_matches(item_category, categories)
+        return keyword_match and category_match and subcategory_match
 
-        return keyword_match and category_match
+    def _category_matches(self, item: ReceiptItem, categories: list[str], subcategories: list[str] = None) -> bool:
+        """Check if item matches category/subcategory criteria"""
 
-    def _category_matches(self, item_category: str, categories: list[str]) -> bool:
-        """Check category match using any() with generator"""
-        item_lower = item_category.lower()
+        category_match = not categories or item.category in categories
+        subcategory_match = not subcategories or item.subcategory in subcategories
 
-        return any(cat.lower() in item_lower or item_lower == cat.lower() for cat in categories)
+        return category_match and subcategory_match

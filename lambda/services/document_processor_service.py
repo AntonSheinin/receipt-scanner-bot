@@ -1,14 +1,18 @@
+"""
+    Document Processor Service module
+"""
+
 from abc import ABC, abstractmethod
 from typing import Dict, Optional
 from enum import Enum
 import logging
-
 from config import OCR_PROCESSING_MODE, DOCUMENT_PROCESSING_MODE, OCR_PROVIDER, LLM_PROVIDER, setup_logging
 from services.storage_service import StorageService
 from services.llm_service import LLMService
 from provider_factory import ProviderFactory
 from utils.image_preprocessor.pillow_preprocessor import ImagePreprocessorPillow
 from receipt_schemas import ReceiptAnalysisResult
+
 
 setup_logging()
 logger = logging.getLogger(__name__)

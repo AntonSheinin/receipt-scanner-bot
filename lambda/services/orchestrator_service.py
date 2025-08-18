@@ -1,11 +1,10 @@
-# lambda/services/orchestration_service.py - NEW FILE
 """
-Orchestration Service - Routes messages to appropriate services
+    Orchestration Service module
 """
+
 import logging
 from typing import Dict, Any
 from enum import Enum
-
 from services.receipt_service import ReceiptService
 from services.query_service import QueryService
 from services.telegram_service import TelegramService

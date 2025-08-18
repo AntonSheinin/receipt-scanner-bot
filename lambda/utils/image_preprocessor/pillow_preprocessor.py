@@ -1,6 +1,5 @@
 """
-Lightweight Image Preprocessor using only PIL
-No OpenCV dependency - suitable for Lambda without layers
+    Image Preprocessor moduleusing only PIL
 """
 
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
@@ -10,8 +9,8 @@ from typing import Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
 
-logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
 
 class ProcessingMode(Enum):
     """Image processing quality modes"""

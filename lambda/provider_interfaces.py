@@ -1,8 +1,13 @@
+"""
+    Provider Interfaces for various service providers
+"""
+
 from abc import ABC, abstractmethod
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 from decimal import Decimal
 from receipt_schemas import ReceiptItem
+
 
 @dataclass
 class LLMResponse:
@@ -17,7 +22,7 @@ class OCRResponse:
     receipt_number: Optional[str] = None
     total: Optional[Decimal] = None
     payment_method: Optional[str] = None
-    items: List[ReceiptItem] = field(default_factory=list)
+    items: List[Dict] = field(default_factory=list)
     confidence: float = 0.0
     success: bool = True
     error_message: Optional[str] = None

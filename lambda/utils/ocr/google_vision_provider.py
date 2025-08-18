@@ -1,17 +1,19 @@
+"""
+    Google Vision Provider module
+"""
+
 import json
 import os
 import re
 import logging
-
 from google.cloud import vision
 from typing import List, Dict, Any
 from decimal import Decimal
-
 from config import setup_logging
 from utils.helpers import normalize_date
 from provider_interfaces import OCRProvider, OCRResponse
 from receipt_schemas import ReceiptItem
-
+from utils.category_manager import category_manager
 from google.oauth2 import service_account
 
 
@@ -55,7 +57,6 @@ class GoogleVisionProvider(OCRProvider):
             return OCRResponse(
                 raw_text=raw_text,
                 confidence=0.0,  # text_detection() does not provide confidence for raw text
-                payment_method=self._detect_payment_method(raw_text)
             )
 
         except Exception as e:
@@ -108,13 +109,13 @@ class GoogleVisionProvider(OCRProvider):
             # Fallback to basic text extraction
             return self.extract_raw_text(image_data)
 
-    def _extract_structured_data(self, response) -> Dict[str, Any]:
+    def _extract_structured_data(self, response, analyze_blocks: bool = False) -> Dict[str, Any]:
         """Extract structured receipt data from Google Vision document response"""
         if not response.full_text_annotation:
             return {}
 
         structured_data = {}
-        blocks = []
+        blocks: list[dict] = []
 
         # Extract text blocks with positions
         for page in response.full_text_annotation.pages:
@@ -136,7 +137,10 @@ class GoogleVisionProvider(OCRProvider):
                     })
 
         # Analyze blocks to extract receipt fields
-        structured_data.update(self._analyze_receipt_blocks(blocks))
+        if analyze_blocks:
+            structured_data.update(self._analyze_receipt_blocks(blocks))
+        else:
+            structured_data['items'] = blocks
 
         return structured_data
 
@@ -182,35 +186,20 @@ class GoogleVisionProvider(OCRProvider):
                 try:
                     price = Decimal(item_match.group(2))
                     if len(item_name) > 2 and price > 0:
-                        items.append(ReceiptItem(
-                            name=item_name,
-                            price=Decimal(price),
-                            quantity=Decimal('1'),
-                            category=self._categorize_item(item_name),
-                            discount=Decimal('0')
-                        ))
-                except:
+                        item_dict = {
+                            'name': item_name,
+                            'price': float(price),  # Convert to float for JSON serialization
+                            'quantity': 1.0,
+                            'discount': 0.0
+                        }
+                        items.append(item_dict)
+
+                except Exception as e:
+                    logger.warning(f"Failed to create item dict for '{item_name}': {e}")
                     pass
 
         result['items'] = items
         return result
-
-    def _categorize_item(self, item_name: str) -> str:
-        """Categorize item based on name"""
-        name_lower = item_name.lower()
-
-        food_keywords = ['bread', 'milk', 'cheese', 'meat', 'fruit', 'vegetable']
-        beverage_keywords = ['juice', 'water', 'soda', 'coffee', 'tea']
-        household_keywords = ['soap', 'detergent', 'paper', 'towel', 'cas', 'gasoline', 'octane']
-
-        if any(keyword in name_lower for keyword in food_keywords):
-            return 'food'
-        elif any(keyword in name_lower for keyword in beverage_keywords):
-            return 'beverages'
-        elif any(keyword in name_lower for keyword in household_keywords):
-            return 'household'
-
-        return 'other'
 
     def _extract_bounds(self, bounding_box) -> Dict[str, int]:
         """Extract bounding box coordinates"""

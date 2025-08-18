@@ -1,10 +1,10 @@
 """
-Receipt Processing Service
+    Receipt Processing Service module
 """
+
 import logging
 import uuid
 from typing import Dict
-
 from services.telegram_service import TelegramService
 from services.storage_service import StorageService
 from services.document_processor_service import DocumentProcessorService
@@ -75,8 +75,7 @@ class ReceiptService:
         try:
             # Store validated data
             logger.info(f"Storing receipt data for ID: {receipt_id}")
-            receipt_data = analysis_result.receipt_data.model_dump_for_storage()
-            self.storage.store_receipt_data(receipt_id, secure_user_id, receipt_data, image_url)
+            self.storage.store_receipt_data(receipt_id, secure_user_id, analysis_result.receipt_data, image_url)
             response_text = self._format_receipt_response(analysis_result, receipt_id)
             self.telegram.send_message(chat_id, response_text, parse_mode=None)
 

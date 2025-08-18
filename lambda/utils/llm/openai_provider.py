@@ -1,3 +1,7 @@
+"""
+    OpenAI Provider module
+"""
+
 from typing import Optional, List, Dict, Any
 import base64
 import logging
@@ -5,6 +9,7 @@ from openai import OpenAI
 from provider_interfaces import LLMProvider, LLMResponse
 from config import setup_logging
 import os
+
 
 setup_logging()
 logger = logging.getLogger(__name__)

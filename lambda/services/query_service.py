@@ -1,13 +1,12 @@
 """
-Query Processing Service
+    Query Processing Service module
 """
+
 import json
 import logging
-from typing import Dict, Optional, List, Any
-from datetime import datetime
-
+from typing import Dict, Optional, List
 from config import LLM_PROVIDER, setup_logging
-
+from receipt_schemas import ReceiptData
 from services.telegram_service import TelegramService
 from services.storage_service import StorageService
 from services.llm_service import LLMService
@@ -82,7 +81,7 @@ class QueryService:
     def _generate_query_plan(self, question: str) -> Optional[Dict]:
         """Generate DynamoDB query plan using LLM"""
 
-        prompt = self.prompts.get_generate_query_plan_prompt(question)
+        prompt = self.prompts.get_query_plan_prompt(question)
 
         try:
             return self.llm.generate_query_plan(prompt)
@@ -94,18 +93,16 @@ class QueryService:
     def _execute_query(self, query_plan: Dict, user_id: str) -> Optional[Dict]:
         """Execute query and aggregate results"""
         try:
-
             # Validate and clean query plan
             query_plan = self._validate_query_plan(query_plan)
             logger.info(f"Cleaned query plan: {json.dumps(query_plan, indent=2)}")
-
         except Exception as e:
             logger.error(f"Query plan validation error: {e}")
             return None
 
         logger.info("Executing query with cleaned plan")
 
-        # Get filtered receipts from storage
+        # Get filtered receipts from storage - returns List[ReceiptData]
         receipts = self.storage.get_filtered_receipts(query_plan, user_id)
         if not receipts:
             logger.info("No receipts found for query")
@@ -114,20 +111,18 @@ class QueryService:
         logger.info(f"Found {len(receipts)} receipts")
 
         try:
-            # Apply item-level filtering
+            # Apply item-level filtering - now works with ReceiptData objects
             filtered_receipts = self._filter_by_items(receipts, query_plan.get("filter", {}))
             logger.info(f"After filtering: {len(filtered_receipts)} receipts")
-
         except Exception as e:
             logger.error(f"Item filtering error: {e}")
             return None
 
         try:
-            # Apply sorting
+            # Apply sorting - works with ReceiptData objects
             sort_by = query_plan.get("sort_by", "date_desc")
             filtered_receipts = self._sort_receipts(filtered_receipts, sort_by)
             logger.info(f"After sorting by '{sort_by}': {len(filtered_receipts)} receipts")
-
         except Exception as e:
             logger.error(f"Sorting error: {e}")
             return None
@@ -141,7 +136,7 @@ class QueryService:
             logger.info(f"After limit {limit}: {len(filtered_receipts)} receipts")
 
         try:
-            # Apply aggregation
+            # Apply aggregation - works with ReceiptData objects
             aggregation_type = AggregationType(
                 query_plan.get("aggregation", AggregationType.COUNT_RECEIPTS)
             )
@@ -150,11 +145,14 @@ class QueryService:
 
             logger.info(f"Aggregation result: {result.data}")
 
+            # Convert ReceiptData objects to dict for raw_data (for LLM context)
+            raw_data_dicts = [receipt.model_dump() for receipt in filtered_receipts[:10]]
+
             return {
                 "query": query_plan,
                 "results": result.data,
                 "result_type": result.result_type,
-                "raw_data": filtered_receipts[:10],  # Always send sample data for context
+                "raw_data": raw_data_dicts,  # Convert to dict for LLM
                 "total_receipts": len(filtered_receipts)
             }
 
@@ -197,16 +195,16 @@ class QueryService:
             "sort_by": sort_by
         }
 
-    def _sort_receipts(self, receipts: List[Dict], sort_by: str) -> List[Dict]:
+    def _sort_receipts(self, receipts: List[ReceiptData], sort_by: str) -> List[ReceiptData]:
         """Sort receipts based on criteria with robust error handling"""
         # Mapping of sort criteria to sort functions
         sort_functions = {
             "upload_date_desc": lambda r: r.created_at if hasattr(r, 'created_at') else '1900-01-01T00:00:00',
             "upload_date_asc": lambda r: r.created_at if hasattr(r, 'created_at') else '1900-01-01T00:00:00',
-            "receipt_date_desc": lambda r: r.date if hasattr(r, 'date') else '1900-01-01',
-            "receipt_date_asc": lambda r: r.date if hasattr(r, 'date') else '1900-01-01',
-            "total_desc": lambda r: r.total if hasattr(r, 'total') else 0.0,
-            "total_asc": lambda r: r.total if hasattr(r, 'total') else 0.0,
+            "receipt_date_desc": lambda r: r.date,
+            "receipt_date_asc": lambda r: r.date,
+            "total_desc": lambda r: r.total,
+            "total_asc": lambda r: r.total,
         }
 
         # Determine reverse flag
@@ -219,67 +217,54 @@ class QueryService:
                 reverse=sort_by in reverse_sorts
             )
         else:
-            # Default to upload date desc
+            # Default to receipt date desc
             return sorted(receipts, key=lambda r: r.date, reverse=True)
 
-    def _filter_by_items(self, receipts: List[Dict], filter_params: Dict) -> List[Dict]:
-        """Filter receipts by item-level criteria"""
+    def _filter_by_items(self, receipts: List[ReceiptData], filter_params: Dict) -> List[ReceiptData]:
+        """Filter receipts by item-level criteria including subcategories"""
 
         categories = filter_params.get("categories", [])
+        subcategories = filter_params.get("subcategories", [])
         keywords = filter_params.get("item_keywords", [])
         price_range = filter_params.get("price_range", {})
 
-        # Remove empty lists and None values
-        categories = [c for c in categories if c] if categories else []
-        keywords = [k for k in keywords if k] if keywords else []
-
-        # If no item-level filters, return all receipts
-        if not categories and not keywords and not price_range:
-            logger.info("No item-level filters specified, returning all receipts")
+        if not categories and not subcategories and not keywords and not price_range:
+            logger.info("No item-level filters specified")
             return receipts
 
-        # Check if price_range has valid values
         has_price_filter = False
         min_price = max_price = None
-        if price_range and isinstance(price_range, dict):
+        if price_range:
             min_price = price_range.get("min")
             max_price = price_range.get("max")
             if min_price is not None and max_price is not None:
-                try:
-                    min_price = float(min_price)
-                    max_price = float(max_price)
-                    has_price_filter = True
-                except (ValueError, TypeError):
-                    pass
+                min_price = float(min_price)
+                max_price = float(max_price)
+                has_price_filter = True
 
         filtered_receipts = []
 
         for receipt in receipts:
-            items = receipt.get('items', [])
             receipt_matches = False
 
-            for item in items:
+            for item in receipt.items:
                 item_matches = True
 
-                # Check category
                 if categories:
-                    item_category = item.get('category', '').lower()
-                    if not any(cat.lower() in item_category or item_category == cat.lower() for cat in categories):
+                    if item.category not in categories:
                         item_matches = False
 
-                # Check keywords
+                if subcategories and item_matches:
+                    if item.subcategory not in subcategories:
+                        item_matches = False
+
                 if keywords and item_matches:
-                    item_name = item.get('name', '').lower()
+                    item_name = item.name.lower()
                     if not any(keyword.lower() in item_name for keyword in keywords):
                         item_matches = False
 
-                # Check price range
                 if has_price_filter and item_matches:
-                    try:
-                        item_price = float(item.get('price', 0))
-                        if not (min_price <= item_price <= max_price):
-                            item_matches = False
-                    except (ValueError, TypeError):
+                    if not (min_price <= float(item.price) <= max_price):
                         item_matches = False
 
                 if item_matches:
@@ -289,4 +274,5 @@ class QueryService:
             if receipt_matches:
                 filtered_receipts.append(receipt)
 
+        logger.info(f"Filtered receipts: {len(filtered_receipts)} out of {len(receipts)}")
         return filtered_receipts

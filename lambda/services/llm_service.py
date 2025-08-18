@@ -1,3 +1,7 @@
+"""
+    LLM Service module
+"""
+
 import re
 from typing import Dict, Optional
 import logging
@@ -7,6 +11,7 @@ from provider_factory import ProviderFactory
 from utils.llm.prompts import PromptManager
 from receipt_schemas import ReceiptAnalysisResult
 from pydantic import ValidationError
+
 
 setup_logging()
 logger = logging.getLogger(__name__)

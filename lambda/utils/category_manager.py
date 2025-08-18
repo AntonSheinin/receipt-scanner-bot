@@ -1,19 +1,21 @@
 """
-Category Manager for reading and managing retail taxonomy from JSON file
+    Category Manager for reading and managing categories/subcategories taxonomy
 """
+
 import json
 import os
 from typing import Dict, List
 
+
 class CategoryManager:
     """Manager for category operations using categories.json"""
 
-    def __init__(self, taxonomy_file_path: str = "categories.json"):
+    def __init__(self, taxonomy_file_path: str = "utils/categories.json"):
         self.taxonomy_file_path = taxonomy_file_path
         self.taxonomy = self._load_taxonomy()
         self._flat_subcategories = self._build_flat_subcategories()
 
-    def _load_taxonomy(self) -> Dict | None:
+    def _load_taxonomy(self) -> Dict:
         """Load taxonomy from JSON file"""
         try:
             # Try to load from the lambda directory first
@@ -28,21 +30,21 @@ class CategoryManager:
                 return json.load(f)
 
         except (FileNotFoundError, json.JSONDecodeError) as e:
-            return None
+            raise ValueError("Failed to load taxonomy") from e
 
     def _build_flat_subcategories(self) -> Dict[str, str]:
         """Build flat mapping of subcategory -> category"""
         flat_map = {}
-        for category in self.taxonomy.get("categories", []):
-            category_code = category.get("code", "other")
-            for subcategory in category.get("subcategories", []):
-                subcat_code = subcategory.get("code", "miscellaneous")
+        for category in self.taxonomy["categories"]:
+            category_code = category["code"]
+            for subcategory in category["subcategories"]:
+                subcat_code = subcategory["code"]
                 flat_map[subcat_code] = category_code
         return flat_map
 
     def get_all_categories(self) -> List[str]:
         """Get list of all category codes"""
-        return [cat.get("code", "other") for cat in self.taxonomy.get("categories", [])]
+        return [cat["code"] for cat in self.taxonomy["categories"]]
 
     def get_all_subcategories(self) -> List[str]:
         """Get list of all subcategory codes"""
@@ -50,9 +52,9 @@ class CategoryManager:
 
     def get_subcategories_for_category(self, category: str) -> List[str]:
         """Get subcategories for a specific category"""
-        for cat in self.taxonomy.get("categories", []):
-            if cat.get("code") == category:
-                return [sub.get("code", "miscellaneous") for sub in cat.get("subcategories", [])]
+        for cat in self.taxonomy["categories"]:
+            if cat["code"] == category:
+                return [sub["code"] for sub in cat["subcategories"]]
         return []
 
     def get_category_from_subcategory(self, subcategory: str) -> str:
@@ -62,14 +64,6 @@ class CategoryManager:
     def get_taxonomy_json_for_llm(self) -> str:
         """Get taxonomy as JSON string for LLM"""
         return json.dumps(self.taxonomy, indent=2)
-
-    def get_categories_list_for_llm(self) -> str:
-        """Generate simple categories list for query prompts"""
-        return ", ".join(self.get_all_categories())
-
-    def get_subcategories_list_for_llm(self) -> str:
-        """Generate simple subcategories list for query prompts"""
-        return ", ".join(self.get_all_subcategories())
 
 # Global instance
 category_manager = CategoryManager()
