@@ -117,23 +117,6 @@ class DynamoDBStorageProvider(DocumentStorage):
             logger.error(f"DynamoDB delete error: {e}")
             return False
 
-    def batch_write(self, table: str, items: List[Dict[str, Any]]) -> bool:
-        """Batch write documents to DynamoDB"""
-        try:
-            table_resource = self.dynamodb.Table(table)
-
-            with table_resource.batch_writer() as batch:
-                for item in items:
-                    processed_item = convert_floats_to_decimals(item)
-                    batch.put_item(Item=processed_item)
-
-            logger.info(f"Batch wrote {len(items)} items to table: {table}")
-            return True
-
-        except Exception as e:
-            logger.error(f"DynamoDB batch write error: {e}")
-            return False
-
     def _build_key_condition(self, key_condition: Dict[str, Any]):
         """Build DynamoDB key condition expression"""
         # Simple implementation - can be enhanced

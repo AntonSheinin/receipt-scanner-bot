@@ -126,7 +126,7 @@ class OrchestratorService:
             return {"status": "empty_query"}
 
         # Send processing message
-        self.telegram_service.send_message(chat_id, "🔍 מעבדים את השאלה... נא להמתין.")
+        self.telegram_service.send_message(chat_id, "🔍 מעבדים את השאלה...")
 
         # Process query using query service
         result = self.query_service.process_query(text, chat_id)

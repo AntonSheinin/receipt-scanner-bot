@@ -4,9 +4,8 @@
 
 import json
 import logging
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 from config import LLM_PROVIDER, setup_logging
-from receipt_schemas import ReceiptData
 from services.telegram_service import TelegramService
 from services.storage_service import StorageService
 from services.llm_service import LLMService
@@ -91,7 +90,7 @@ class QueryService:
             return None
 
     def _execute_query(self, query_plan: Dict, user_id: str) -> Optional[Dict]:
-        """Execute query and aggregate results"""
+        """Execute query and aggregate results - works with raw dicts"""
         try:
             # Validate and clean query plan
             query_plan = self._validate_query_plan(query_plan)
@@ -102,7 +101,7 @@ class QueryService:
 
         logger.info("Executing query with cleaned plan")
 
-        # Get filtered receipts from storage - returns List[ReceiptData]
+        # Get filtered receipts from storage - returns List[Dict]
         receipts = self.storage.get_filtered_receipts(query_plan, user_id)
         if not receipts:
             logger.info("No receipts found for query")
@@ -111,7 +110,7 @@ class QueryService:
         logger.info(f"Found {len(receipts)} receipts")
 
         try:
-            # Apply item-level filtering - now works with ReceiptData objects
+            # Apply item-level filtering - now works with raw dicts
             filtered_receipts = self._filter_by_items(receipts, query_plan.get("filter", {}))
             logger.info(f"After filtering: {len(filtered_receipts)} receipts")
         except Exception as e:
@@ -119,7 +118,7 @@ class QueryService:
             return None
 
         try:
-            # Apply sorting - works with ReceiptData objects
+            # Apply sorting - works with raw dicts
             sort_by = query_plan.get("sort_by", "date_desc")
             filtered_receipts = self._sort_receipts(filtered_receipts, sort_by)
             logger.info(f"After sorting by '{sort_by}': {len(filtered_receipts)} receipts")
@@ -136,7 +135,7 @@ class QueryService:
             logger.info(f"After limit {limit}: {len(filtered_receipts)} receipts")
 
         try:
-            # Apply aggregation - works with ReceiptData objects
+            # Apply aggregation - works with raw dicts
             aggregation_type = AggregationType(
                 query_plan.get("aggregation", AggregationType.COUNT_RECEIPTS)
             )
@@ -145,14 +144,14 @@ class QueryService:
 
             logger.info(f"Aggregation result: {result.data}")
 
-            # Convert ReceiptData objects to dict for raw_data (for LLM context)
-            raw_data_dicts = [receipt.model_dump() for receipt in filtered_receipts[:10]]
+            # Raw data for LLM context (already dicts)
+            raw_data = filtered_receipts[:10]
 
             return {
                 "query": query_plan,
                 "results": result.data,
                 "result_type": result.result_type,
-                "raw_data": raw_data_dicts,  # Convert to dict for LLM
+                "raw_data": raw_data,
                 "total_receipts": len(filtered_receipts)
             }
 
@@ -195,16 +194,16 @@ class QueryService:
             "sort_by": sort_by
         }
 
-    def _sort_receipts(self, receipts: List[ReceiptData], sort_by: str) -> List[ReceiptData]:
-        """Sort receipts based on criteria with robust error handling"""
+    def _sort_receipts(self, receipts: List[Dict[str, Any]], sort_by: str) -> List[Dict[str, Any]]:
+        """Sort receipts based on criteria - works with raw dicts"""
         # Mapping of sort criteria to sort functions
         sort_functions = {
-            "upload_date_desc": lambda r: r.created_at if hasattr(r, 'created_at') else '1900-01-01T00:00:00',
-            "upload_date_asc": lambda r: r.created_at if hasattr(r, 'created_at') else '1900-01-01T00:00:00',
-            "receipt_date_desc": lambda r: r.date,
-            "receipt_date_asc": lambda r: r.date,
-            "total_desc": lambda r: r.total,
-            "total_asc": lambda r: r.total,
+            "upload_date_desc": lambda r: r.get('created_at', '1900-01-01T00:00:00'),
+            "upload_date_asc": lambda r: r.get('created_at', '1900-01-01T00:00:00'),
+            "receipt_date_desc": lambda r: r.get('date', '1900-01-01'),
+            "receipt_date_asc": lambda r: r.get('date', '1900-01-01'),
+            "total_desc": lambda r: float(r.get('total', 0)),
+            "total_asc": lambda r: float(r.get('total', 0)),
         }
 
         # Determine reverse flag
@@ -218,10 +217,10 @@ class QueryService:
             )
         else:
             # Default to receipt date desc
-            return sorted(receipts, key=lambda r: r.date, reverse=True)
+            return sorted(receipts, key=lambda r: r.get('date', '1900-01-01'), reverse=True)
 
-    def _filter_by_items(self, receipts: List[ReceiptData], filter_params: Dict) -> List[ReceiptData]:
-        """Filter receipts by item-level criteria including subcategories"""
+    def _filter_by_items(self, receipts: List[Dict[str, Any]], filter_params: Dict) -> List[Dict[str, Any]]:
+        """Filter receipts by item-level criteria - works with raw dicts"""
 
         categories = filter_params.get("categories", [])
         subcategories = filter_params.get("subcategories", [])
@@ -246,25 +245,27 @@ class QueryService:
 
         for receipt in receipts:
             receipt_matches = False
+            items = receipt.get('items', [])
 
-            for item in receipt.items:
+            for item in items:
                 item_matches = True
 
                 if categories:
-                    if item.category not in categories:
+                    if item.get('category', '') not in categories:
                         item_matches = False
 
                 if subcategories and item_matches:
-                    if item.subcategory not in subcategories:
+                    if item.get('subcategory', '') not in subcategories:
                         item_matches = False
 
                 if keywords and item_matches:
-                    item_name = item.name.lower()
+                    item_name = item.get('name', '').lower()
                     if not any(keyword.lower() in item_name for keyword in keywords):
                         item_matches = False
 
                 if has_price_filter and item_matches:
-                    if not (min_price <= float(item.price) <= max_price):
+                    item_price = float(item.get('price', 0))
+                    if not (min_price <= item_price <= max_price):
                         item_matches = False
 
                 if item_matches:

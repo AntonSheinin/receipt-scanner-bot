@@ -3,11 +3,10 @@
 """
 
 import logging
-from typing import Any
+from typing import Any, List, Dict
 from enum import StrEnum
 from dataclasses import dataclass
 from collections import defaultdict
-from receipt_schemas import ReceiptData, ReceiptItem
 from decimal import Decimal
 from config import setup_logging
 
@@ -48,8 +47,8 @@ class ResultAggregatorService:
             AggregationType.LIST_STORES: self._list_stores,
         }
 
-    def aggregate(self, receipts: list[ReceiptData], aggregation_type: AggregationType, filter_params: dict[str, Any]) -> AggregationResult:
-        """Main aggregation dispatcher using method dispatch table"""
+    def aggregate(self, receipts: List[Dict[str, Any]], aggregation_type: AggregationType, filter_params: Dict[str, Any]) -> AggregationResult:
+        """Main aggregation dispatcher using method dispatch table - works with raw dicts"""
 
         logger.info(f"Aggregating {len(receipts)} receipts with type: {aggregation_type}")
 
@@ -64,9 +63,8 @@ class ResultAggregatorService:
                 result_type="error"
             )
 
-    def _count_receipts(self, receipts: list[ReceiptData], _: dict[str, Any]) -> AggregationResult:
-        """Count receipts - simple and clean"""
-
+    def _count_receipts(self, receipts: List[Dict[str, Any]], _: Dict[str, Any]) -> AggregationResult:
+        """Count receipts - works with raw dicts"""
         logger.info(f"Counting receipts: {len(receipts)} found")
 
         return AggregationResult(
@@ -74,12 +72,11 @@ class ResultAggregatorService:
             result_type="count"
         )
 
-    def _sum_total(self, receipts: list[ReceiptData], _: dict[str, Any]) -> AggregationResult:
-        """Sum total using generator expression for memory efficiency"""
-
+    def _sum_total(self, receipts: List[Dict[str, Any]], _: Dict[str, Any]) -> AggregationResult:
+        """Sum total using generator expression - works with raw dicts"""
         logger.info("Calculating total spent across all receipts")
 
-        total= sum(receipt.total for receipt in receipts)
+        total = sum(Decimal(str(receipt.get('total', 0))) for receipt in receipts)
 
         return AggregationResult(
             data={
@@ -89,9 +86,8 @@ class ResultAggregatorService:
             result_type="sum_total"
         )
 
-    def _sum_by_category(self, receipts: list[ReceiptData], filter_params: dict[str, Any]) -> AggregationResult:
-        """Category breakdown using defaultdict and comprehensions"""
-
+    def _sum_by_category(self, receipts: List[Dict[str, Any]], filter_params: Dict[str, Any]) -> AggregationResult:
+        """Category breakdown using defaultdict - works with raw dicts"""
         logger.info("Calculating total spent by category/subcategory")
 
         categories = filter_params.get("categories", [])
@@ -100,15 +96,23 @@ class ResultAggregatorService:
         subcategory_sums = defaultdict(Decimal)
 
         for receipt in receipts:
-            for item in receipt.items:
+            items = receipt.get('items', [])
+            for item in items:
                 # Check if item matches filters
-                category_match = not categories or item.category in categories
-                subcategory_match = not subcategories or item.subcategory in subcategories
+                item_category = item.get('category', '')
+                item_subcategory = item.get('subcategory', '')
+
+                category_match = not categories or item_category in categories
+                subcategory_match = not subcategories or item_subcategory in subcategories
 
                 if category_match and subcategory_match:
-                    item_total = (item.price * item.quantity) + item.discount
-                    category_sums[item.category] += item_total
-                    subcategory_sums[item.subcategory] += item_total
+                    price = Decimal(str(item.get('price', 0)))
+                    quantity = Decimal(str(item.get('quantity', 1)))
+                    discount = Decimal(str(item.get('discount', 0)))
+
+                    item_total = (price * quantity) + discount
+                    category_sums[item_category] += item_total
+                    subcategory_sums[item_subcategory] += item_total
 
         # Convert to float for JSON serialization
         category_totals = {k: float(v) for k, v in category_sums.items()}
@@ -124,22 +128,23 @@ class ResultAggregatorService:
             result_type="category_breakdown"
         )
 
-    def _price_by_store(self, receipts: list[ReceiptData], filter_params: dict[str, Any], price_func) -> AggregationResult:
-        """Unified min/max price by store using callable parameter"""
-
+    def _price_by_store(self, receipts: List[Dict[str, Any]], filter_params: Dict[str, Any], price_func) -> AggregationResult:
+        """Unified min/max price by store - works with raw dicts"""
         logger.info(f"Calculating {price_func.__name__} price by store")
 
         keywords = filter_params.get("item_keywords", [])
         categories = filter_params.get("categories", [])
         subcategories = filter_params.get("subcategories", [])
-        store_prices: dict[str, Decimal] = {}
+        store_prices: Dict[str, Decimal] = {}
 
         for receipt in receipts:
-            store = receipt.store_name
+            store = receipt.get('store_name', 'Unknown Store')
+            items = receipt.get('items', [])
 
             matching_prices = [
-                item.price for item in receipt.items
-                if (self._item_matches_criteria(item, keywords, categories, subcategories) and item.price > 0)
+                Decimal(str(item.get('price', 0))) for item in items
+                if (self._item_matches_criteria_dict(item, keywords, categories, subcategories)
+                    and float(item.get('price', 0)) > 0)
             ]
 
             if matching_prices:
@@ -157,17 +162,18 @@ class ResultAggregatorService:
             result_type="price_comparison"
         )
 
-    def _sum_by_payment(self, receipts: list[ReceiptData], filter_params: dict[str, Any]) -> AggregationResult:
-        """Payment method breakdown using comprehension"""
-
+    def _sum_by_payment(self, receipts: List[Dict[str, Any]], filter_params: Dict[str, Any]) -> AggregationResult:
+        """Payment method breakdown - works with raw dicts"""
         logger.info("Calculating total spent by payment method")
 
         payment_methods = filter_params.get("payment_methods", [])
         payment_sums = defaultdict(Decimal)
 
         for receipt in receipts:
-            if not payment_methods or receipt.payment_method in payment_methods:
-                payment_sums[receipt.payment_method] += receipt.total
+            payment_method = receipt.get('payment_method', 'other')
+            if not payment_methods or payment_method in payment_methods:
+                total = Decimal(str(receipt.get('total', 0)))
+                payment_sums[payment_method] += total
 
         rounded_sums = {k: float(v) for k, v in payment_sums.items()}
 
@@ -180,12 +186,11 @@ class ResultAggregatorService:
             result_type="payment_breakdown"
         )
 
-    def _list_stores(self, receipts: list[ReceiptData], _: dict[str, Any]) -> AggregationResult:
-        """List unique stores using set comprehension"""
-
+    def _list_stores(self, receipts: List[Dict[str, Any]], _: Dict[str, Any]) -> AggregationResult:
+        """List unique stores - works with raw dicts"""
         logger.info("Listing unique stores from receipts")
 
-        stores = list({receipt.store_name for receipt in receipts})
+        stores = list({receipt.get('store_name', 'Unknown Store') for receipt in receipts})
 
         return AggregationResult(
             data={
@@ -196,21 +201,14 @@ class ResultAggregatorService:
             result_type="store_list"
         )
 
-    def _item_matches_criteria(self, item: ReceiptItem, keywords: list[str], categories: list[str], subcategories: list[str] = None) -> bool:
-        """Check if item matches criteria using all()"""
-
-        item_name = item.name.lower()
+    def _item_matches_criteria_dict(self, item: Dict[str, Any], keywords: List[str], categories: List[str], subcategories: List[str] = None) -> bool:
+        """Check if item dict matches criteria"""
+        item_name = item.get('name', '').lower()
+        item_category = item.get('category', '')
+        item_subcategory = item.get('subcategory', '')
 
         keyword_match = not keywords or any(keyword.lower() in item_name for keyword in keywords)
-        category_match = not categories or item.category in categories
-        subcategory_match = not subcategories or item.subcategory in subcategories
+        category_match = not categories or item_category in categories
+        subcategory_match = not subcategories or item_subcategory in subcategories
 
         return keyword_match and category_match and subcategory_match
-
-    def _category_matches(self, item: ReceiptItem, categories: list[str], subcategories: list[str] = None) -> bool:
-        """Check if item matches category/subcategory criteria"""
-
-        category_match = not categories or item.category in categories
-        subcategory_match = not subcategories or item.subcategory in subcategories
-
-        return category_match and subcategory_match

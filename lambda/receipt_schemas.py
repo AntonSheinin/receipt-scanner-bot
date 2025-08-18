@@ -192,7 +192,7 @@ class ReceiptData(BaseModel):
 
     @field_validator('date')
     @classmethod
-    def validate_date_format(cls, v: str) -> str:
+    def validate_date_format(cls, v: str) -> str | None:
         """Validate date format and ensure it's not more than 6 months old"""
         cleaned = v.strip()
         if not cleaned:
