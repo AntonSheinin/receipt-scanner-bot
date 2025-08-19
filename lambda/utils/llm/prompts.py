@@ -171,102 +171,6 @@ Return ONLY valid JSON with all required fields, no explanations.
 """
 
     @staticmethod
-    def get_query_plan_prompt(question: str) -> str:
-        current_date = datetime.now(timezone.utc)
-        current_month = current_date.strftime('%Y-%m')
-        last_month = (current_date.replace(day=1) - timedelta(days=1)).strftime('%Y-%m')
-
-        taxonomy_json = category_manager.get_taxonomy_json_for_llm()
-
-        return f"""Analyze this user question about their stored receipts and generate a query plan.
-
-IMPORTANT: All receipts are Israeli receipts with Hebrew text. When generating item_keywords,
-ALWAYS use Hebrew keywords regardless of the question language.
-
-Current date: {current_date.strftime('%Y-%m-%d')}
-Current month: {current_month}
-Last month: {last_month}
-
-Available categories/subcategories codes taxonomy (use subcategory codes for items): {taxonomy_json}
-
-User question: "{question}"
-
-Available filter fields (only include if relevant):
-- "item_keywords": ["keyword1", "keyword2"] - MUST be in Hebrew since receipts are Hebrew
-- "categories": ["category"] - main categories codes from taxonomy json above like food, beverages, household etc.
-- "subcategories": ["subcategory"] - specific subcategories codes from taxonomy json above for precise filtering
-- "date_range": {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}}
-- "store_names": ["store1", "store2"]
-- "price_range": {{"min": 10, "max": 100}}
-- "payment_methods": ["cash", "credit_card", "other"]
-- "limit": 1
-
-Generate a JSON query plan with this structure - ONLY include fields that are actually needed:
-{{
-    "filter": {{}},
-    "aggregation": "count_receipts",
-    "sort_by": "upload_date_desc"
-}}
-
-Available aggregations:
-- "sum_total" - total spending
-- "sum_by_category" - spending by category/subcategory
-- "min_price_by_store" - cheapest price by store
-- "max_price_by_store" - most expensive price by store
-- "count_receipts" - count receipts (use for "show me" queries)
-
-Available sort options:
-- "upload_date_desc" - most recently uploaded first
-- "upload_date_asc" - oldest uploaded first
-- "receipt_date_desc" - most recent purchase date first
-- "receipt_date_asc" - oldest purchase date first
-- "total_desc" - highest amount first
-- "total_asc" - lowest amount first
-
-Rules:
-- Use "subcategories" codes from taxonomy json for specific items (like "meat_poultry", "dairy_eggs")
-- Use "categories" codes from taxonomy json for broader queries (like "food", "household")
-- For "latest/last uploaded" queries, use sort_by: "upload_date_desc"
-- For "most recent purchase" queries, use sort_by: "receipt_date_desc"
-- For "show me" or "what is" queries, use aggregation: "count_receipts"
-- DO NOT include fields with null values - omit them completely
-- DO NOT include empty arrays - omit them completely
-- Only set limit when you want to restrict results (1-10)
-
-CRITICAL: Return keywords in Hebrew characters, not Russian or English.
-
-Examples (but not all the possible Hebrew keywords):
-- For alcohol: ["אלכוהול", "משקאות חריפים", "יין", "בירה", "ויסקי", "וודקה", "ברנדי"]
-- For food: ["לחם", "חלב", "בשר", "ירקות"]
-- For household: ["סבון", "חומרי ניקוי", "נייר טואלט"]
-
-CRITICAL: Return ONLY the JSON object. Do not include null values or empty arrays.
-Don't include any explanations or comments."""
-
-    @staticmethod
-    def get_response_generation_prompt(question: str, results: Dict) -> str:
-        return f"""The user asked: "{question}"
-
-Query executed: {json.dumps(results.get('query', {}), indent=2)}
-
-Aggregation results: {json.dumps(results.get('results', {}), indent=2)}
-
-Total receipts found: {results.get('total_receipts', 0)}
-
-Raw receipts data for context: {json.dumps(results.get('raw_data', []), indent=2)}
-
-Generate a helpful, conversational response for Telegram. Requirements:
-1. Answer the user's question directly and clearly
-2. Include relevant numbers and insights
-3. Use emojis and markdown formatting for Telegram
-4. Be conversational and helpful, not robotic
-5. If no results found, explain why and suggest alternatives
-6. For price comparisons, highlight the best deal
-7. For spending analysis, provide useful insights
-
-Format for Telegram with **bold** text and emojis. Keep it concise but informative."""
-
-    @staticmethod
     def get_hebrew_structure_ocr_text_prompt(ocr_text: str) -> str:
 
         taxonomy_json = category_manager.get_taxonomy_json_for_llm()
@@ -387,3 +291,112 @@ If any required field is missing or invalid, the analysis fails completely.
 
 Return ONLY valid JSON with all required fields, no explanations.
 """
+
+    @staticmethod
+    def get_filter_plan_prompt(question: str) -> str:
+        """Generate filtering-only query plan (no sorting or aggregation)"""
+        current_date = datetime.now(timezone.utc)
+        current_month = current_date.strftime('%Y-%m')
+        last_month = (current_date.replace(day=1) - timedelta(days=1)).strftime('%Y-%m')
+
+        taxonomy_json = category_manager.get_taxonomy_json_for_llm()
+
+        return f"""Analyze this user question about their stored receipts and generate a FILTERING plan only.
+
+IMPORTANT: All receipts are Israeli receipts with Hebrew text. When generating item_keywords,
+ALWAYS use Hebrew keywords regardless of the question language.
+
+Current date: {current_date.strftime('%Y-%m-%d')}
+Current month: {current_month}
+Last month: {last_month}
+
+Available categories/subcategories codes taxonomy: {taxonomy_json}
+
+User question: "{question}"
+
+Generate a JSON filtering plan with this structure - ONLY include fields that are actually needed for filtering:
+{{
+    "filter": {{}}
+}}
+
+Available filter fields (only include if relevant):
+- "item_keywords": ["keyword1", "keyword2"] - MUST be in Hebrew since receipts are Hebrew
+- "categories": ["category"] - main categories codes from taxonomy
+- "subcategories": ["subcategory"] - specific subcategories codes from taxonomy
+- "date_range": {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}}
+- "store_names": ["store1", "store2"]
+- "price_range": {{"min": 10, "max": 100}}
+- "payment_methods": ["cash", "credit_card", "other"]
+- "limit": 50
+
+Rules:
+- Use "subcategories" codes for specific items (like "meat_poultry", "dairy_eggs")
+- Use "categories" codes for broader queries (like "food", "household")
+- DO NOT include fields with null values - omit them completely
+- DO NOT include empty arrays - omit them completely
+- Only set limit when you want to restrict results (10-100)
+- NO SORTING - the LLM will handle any sorting/ordering in the response
+
+CRITICAL: Return keywords in Hebrew characters.
+
+Examples of Hebrew keywords:
+- For alcohol: ["אלכוהול", "יין", "בירה", "ויסקי"]
+- For food: ["לחם", "חלב", "בשר", "ירקות"]
+- For household: ["סבון", "חומרי ניקוי", "נייר טואלט"]
+
+CRITICAL: Return ONLY the JSON object. No explanations or comments."""
+
+    @staticmethod
+    def get_receipt_analysis_response_prompt(question: str, receipt_data: Dict) -> str:
+        """Generate natural language response from filtered receipt data"""
+
+        receipts_json = json.dumps(receipt_data, indent=2, ensure_ascii=False)
+
+        return f"""The user asked: "{question}"
+
+Here is the filtered receipt data that matches their query:
+
+{receipts_json}
+
+Analyze this data and provide a helpful, conversational response in Hebrew. Requirements:
+
+1. **Answer the user's question directly and accurately**
+2. **Perform any necessary calculations** (sums, averages, comparisons, etc.)
+3. **Use emojis and formatting** for better readability
+4. **Be conversational and helpful**, not robotic
+5. **Include specific numbers and insights** from the data
+6. **If no relevant data found**, explain why and suggest alternatives
+7. **For comparisons**, highlight the best deals or interesting patterns
+8. **For spending analysis**, provide useful insights and trends
+
+Mathematical Operations You Can Perform:
+- Sum totals across receipts
+- Calculate averages
+- Find min/max values
+- Count items/receipts
+- Group by store/category/date
+- Calculate percentages
+- Compare prices across stores
+- Analyze spending patterns
+
+Response Guidelines:
+- Write in Hebrew when appropriate for Israeli users
+- Use **bold** text for important numbers
+- Include relevant emojis (💰 for money, 🏪 for stores, 📅 for dates, etc.)
+- Keep response concise but informative (max 4096 characters)
+- Format large numbers clearly (use ₪ for Israeli Shekels)
+- If calculations don't make sense, explain why
+
+Example response style:
+"🏪 **מצאתי 15 קבלות מרמי לוי**
+
+💰 **סה״כ הוצאה**: ₪1,247.50
+📊 **הוצאה ממוצעת לקבלה**: ₪83.17
+📅 **תקופה**: 01/08/2024 - 15/08/2024
+
+🥛 **חלב הכי זול**: ₪4.90 ברמי לוי (12/08)
+🥛 **חלב הכי יקר**: ₪6.20 בשופרסל (08/08)
+
+💡 **מסקנה**: רמי לוי חוסך לך ₪1.30 על כל קנית חלב!"
+
+Now analyze the receipt data and answer the user's question."""

@@ -9,7 +9,6 @@ from config import LLM_PROVIDER, setup_logging
 from services.telegram_service import TelegramService
 from services.storage_service import StorageService
 from services.llm_service import LLMService
-from services.result_aggregator_service import ResultAggregatorService, AggregationType
 from utils.helpers import create_response, get_secure_user_id
 from utils.llm.prompts import PromptManager
 
@@ -18,17 +17,16 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 class QueryService:
-    """Service for natural language query processing"""
+    """Service for natural language query processing - simplified approach"""
 
     def __init__(self):
         self.telegram = TelegramService()
         self.storage = StorageService()
         self.llm = LLMService(LLM_PROVIDER)
-        self.aggregator = ResultAggregatorService()
         self.prompts = PromptManager()
 
     def process_query(self, question: str, chat_id: int) -> Dict:
-        """Handle natural language queries in 4 steps"""
+        """Handle natural language queries in 3 simplified steps"""
 
         logger.info(f"Processing query: {question}")
 
@@ -38,29 +36,29 @@ class QueryService:
             self.telegram.send_typing(chat_id)
             self.telegram.send_message(chat_id, "🔍 מנתחים את שאלתך...")
 
-            # Step 1: Generate query plan
-            query_plan = self._generate_query_plan(question)
+            # Step 1: Generate filter-only query plan
+            query_plan = self._generate_filter_plan(question)
             if not query_plan:
                 self.telegram.send_message(chat_id, "❌ לא הצלחנו להבין את השאלתך. נסה לנסח מחדש.")
                 logger.error(f"Failed to generate query plan for question: {question}")
                 return create_response(200, {"status": "failed"})
 
-            logger.info(f"Query plan for '{question}': {json.dumps(query_plan, indent=2)}")
+            logger.info(f"Filter plan for '{question}': {json.dumps(query_plan, indent=2)}")
 
-            # Step 2: Execute and aggregate
-            results = self._execute_query(query_plan, secure_user_id)
-            if not results:
+            # Step 2: Get filtered receipts
+            filtered_receipts = self._get_filtered_receipts(query_plan, secure_user_id)
+            if not filtered_receipts:
                 self.telegram.send_message(chat_id, "❌ לא נמצאו נתונים תואמים!")
                 logger.info("No matching data found for query")
                 return create_response(200, {"status": "no_data"})
 
-            logger.info(f"Aggregation results: {json.dumps(results['results'], indent=2)}")
+            logger.info(f"Found {len(filtered_receipts)} filtered receipts")
 
-            # Step 3: Generate response
-            self.telegram.send_message(chat_id, "💭 מכינים את התשובה ...")
-            response = self.llm.generate_response(question, results)
+            # Step 3: Let LLM analyze and respond
+            self.telegram.send_message(chat_id, "💭 מכינים את התשובה...")
+            response = self._generate_llm_response(question, filtered_receipts)
 
-            logger.info(f"LLM response: {response}")
+            logger.info(f"LLM response generated successfully")
 
             # Step 4: Send to user
             if response:
@@ -77,90 +75,70 @@ class QueryService:
             self.telegram.send_message(chat_id, "❌ הייתה בעיה בעיבוד השאלתך.")
             return create_response(200, {"status": "error"})
 
-    def _generate_query_plan(self, question: str) -> Optional[Dict]:
-        """Generate DynamoDB query plan using LLM"""
+    def _generate_filter_plan(self, question: str) -> Optional[Dict]:
+        """Generate filtering-only query plan using LLM"""
 
-        prompt = self.prompts.get_query_plan_prompt(question)
+        prompt = self.prompts.get_filter_plan_prompt(question)
 
         try:
             return self.llm.generate_query_plan(prompt)
-
         except Exception as e:
-            logger.error(f"Query plan error: {e}")
+            logger.error(f"Filter plan error: {e}")
             return None
 
-    def _execute_query(self, query_plan: Dict, user_id: str) -> Optional[Dict]:
-        """Execute query and aggregate results - works with raw dicts"""
+    def _get_filtered_receipts(self, query_plan: Dict, user_id: str) -> List[Dict[str, Any]]:
+        """Get and filter receipts - simplified version without sorting"""
         try:
             # Validate and clean query plan
-            query_plan = self._validate_query_plan(query_plan)
-            logger.info(f"Cleaned query plan: {json.dumps(query_plan, indent=2)}")
+            query_plan = self._validate_filter_plan(query_plan)
+            logger.info(f"Cleaned filter plan: {json.dumps(query_plan, indent=2)}")
         except Exception as e:
             logger.error(f"Query plan validation error: {e}")
-            return None
+            return []
 
-        logger.info("Executing query with cleaned plan")
-
-        # Get filtered receipts from storage - returns List[Dict]
+        # Get filtered receipts from storage
         receipts = self.storage.get_filtered_receipts(query_plan, user_id)
         if not receipts:
-            logger.info("No receipts found for query")
-            return None
+            return []
 
-        logger.info(f"Found {len(receipts)} receipts")
+        logger.info(f"Found {len(receipts)} receipts from storage")
 
         try:
-            # Apply item-level filtering - now works with raw dicts
+            # Apply item-level filtering
             filtered_receipts = self._filter_by_items(receipts, query_plan.get("filter", {}))
-            logger.info(f"After filtering: {len(filtered_receipts)} receipts")
+            logger.info(f"After item filtering: {len(filtered_receipts)} receipts")
         except Exception as e:
             logger.error(f"Item filtering error: {e}")
-            return None
-
-        try:
-            # Apply sorting - works with raw dicts
-            sort_by = query_plan.get("sort_by", "date_desc")
-            filtered_receipts = self._sort_receipts(filtered_receipts, sort_by)
-            logger.info(f"After sorting by '{sort_by}': {len(filtered_receipts)} receipts")
-        except Exception as e:
-            logger.error(f"Sorting error: {e}")
-            return None
+            return receipts
 
         # Apply limit
-        filter_params = query_plan.get("filter", {})
-        limit = filter_params.get("limit")
-
+        limit = query_plan.get("filter", {}).get("limit")
         if limit and isinstance(limit, int) and limit > 0:
             filtered_receipts = filtered_receipts[:limit]
             logger.info(f"After limit {limit}: {len(filtered_receipts)} receipts")
 
+        return filtered_receipts
+
+    def _generate_llm_response(self, question: str, receipts: List[Dict[str, Any]]) -> Optional[str]:
+        """Generate response using LLM with filtered receipts data"""
+
+        # Prepare receipt data for LLM
+        receipt_data = {
+            "total_receipts": len(receipts),
+            "receipts": receipts
+        }
+
+        prompt = self.prompts.get_receipt_analysis_response_prompt(question, receipt_data)
+
         try:
-            # Apply aggregation - works with raw dicts
-            aggregation_type = AggregationType(
-                query_plan.get("aggregation", AggregationType.COUNT_RECEIPTS)
-            )
-
-            result = self.aggregator.aggregate(filtered_receipts, aggregation_type, filter_params)
-
-            logger.info(f"Aggregation result: {result.data}")
-
-            # Raw data for LLM context (already dicts)
-            raw_data = filtered_receipts[:10]
-
-            return {
-                "query": query_plan,
-                "results": result.data,
-                "result_type": result.result_type,
-                "raw_data": raw_data,
-                "total_receipts": len(filtered_receipts)
-            }
-
+            response = self.llm.generate_text(prompt, max_tokens=2000)
+            return response.content if response else None
         except Exception as e:
-            logger.error(f"Aggregation error: {e}")
+            logger.error(f"LLM response generation error: {e}")
             return None
 
-    def _validate_query_plan(self, query_plan: Dict) -> Dict:
-        """Clean and validate query plan"""
+    def _validate_filter_plan(self, query_plan: Dict) -> Dict:
+        """Clean and validate filter plan - no sorting needed"""
 
         # Clean up filter
         clean_filter = {}
@@ -172,55 +150,18 @@ class QueryService:
                 if isinstance(value, list) and len(value) > 0:
                     clean_filter[key] = value
                 elif isinstance(value, dict):
-                    # For price_range and date_range, check if they have valid values
                     clean_dict = {k: v for k, v in value.items() if v is not None}
                     if clean_dict:
                         clean_filter[key] = clean_dict
                 elif not isinstance(value, (list, dict)):
                     clean_filter[key] = value
 
-        # Ensure we have valid aggregation
-        aggregation = query_plan.get("aggregation")
-        if not aggregation:
-            aggregation = "count_receipts"
-            logger.warning("No aggregation specified, defaulting to 'count_receipts'")
-
-        # Ensure we have valid sort_by
-        sort_by = query_plan.get("sort_by", "upload_date_desc")
-
         return {
-            "filter": clean_filter,
-            "aggregation": aggregation,
-            "sort_by": sort_by
+            "filter": clean_filter
         }
-
-    def _sort_receipts(self, receipts: List[Dict[str, Any]], sort_by: str) -> List[Dict[str, Any]]:
-        """Sort receipts based on criteria - works with raw dicts"""
-        # Mapping of sort criteria to sort functions
-        sort_functions = {
-            "upload_date_desc": lambda r: r.get('created_at', '1900-01-01T00:00:00'),
-            "upload_date_asc": lambda r: r.get('created_at', '1900-01-01T00:00:00'),
-            "receipt_date_desc": lambda r: r.get('date', '1900-01-01'),
-            "receipt_date_asc": lambda r: r.get('date', '1900-01-01'),
-            "total_desc": lambda r: float(r.get('total', 0)),
-            "total_asc": lambda r: float(r.get('total', 0)),
-        }
-
-        # Determine reverse flag
-        reverse_sorts = {"upload_date_desc", "receipt_date_desc", "total_desc"}
-
-        if sort_by in sort_functions:
-            return sorted(
-                receipts,
-                key=sort_functions[sort_by],
-                reverse=sort_by in reverse_sorts
-            )
-        else:
-            # Default to receipt date desc
-            return sorted(receipts, key=lambda r: r.get('date', '1900-01-01'), reverse=True)
 
     def _filter_by_items(self, receipts: List[Dict[str, Any]], filter_params: Dict) -> List[Dict[str, Any]]:
-        """Filter receipts by item-level criteria - works with raw dicts"""
+        """Filter receipts by item-level criteria"""
 
         categories = filter_params.get("categories", [])
         subcategories = filter_params.get("subcategories", [])
@@ -228,7 +169,6 @@ class QueryService:
         price_range = filter_params.get("price_range", {})
 
         if not categories and not subcategories and not keywords and not price_range:
-            logger.info("No item-level filters specified")
             return receipts
 
         has_price_filter = False
