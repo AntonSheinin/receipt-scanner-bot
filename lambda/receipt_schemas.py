@@ -362,15 +362,6 @@ class ReceiptData(BaseModel):
 
         return self
 
-    def model_dump_for_storage(self) -> dict:
-        """Convert to dict format suitable for DynamoDB storage"""
-        storage_data = self.model_dump(mode='json')
-
-        logger.info(f"Receipt prepared for storage: store='{self.store_name}', items={len(self.items)}, size={len(str(storage_data))} chars")
-
-
-        return storage_data
-
     def get_json_schema(self) -> dict:
         """Get JSON schema for LLM structured output"""
         schema = self.model_json_schema()

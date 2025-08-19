@@ -19,7 +19,6 @@ from aws_cdk import (
     aws_lambda_event_sources as lambda_event_sources,
     aws_iam as iam,
     aws_logs as logs,
-    aws_dynamodb as dynamodb,
     aws_s3 as s3,
     aws_sqs as sqs,
     aws_cloudwatch as cloudwatch,
@@ -27,6 +26,8 @@ from aws_cdk import (
     custom_resources as cr
 )
 from constructs import Construct
+import aws_cdk.aws_rds as rds
+import aws_cdk.aws_ec2 as ec2
 
 
 class ReceiptScannerBotStack(Stack):
@@ -46,14 +47,17 @@ class ReceiptScannerBotStack(Stack):
         # Create single log group for all components
         main_log_group = self._create_main_log_group()
 
+        # Create database infrastructure
+        database, vpc, lambda_security_group = self._create_database_infrastructure()
+
         # Create resources
         receipt_bucket = self._create_s3_bucket()
-        receipt_table = self._create_dynamodb_table()
         processing_queue, dlq = self._create_processing_queue()
-        lambda_role = self._create_lambda_role(receipt_bucket, receipt_table, processing_queue)
-        producer_lambda = self._create_producer_lambda(lambda_role, bot_token, processing_queue, main_log_group)
-        consumer_lambda = self._create_consumer_lambda(lambda_role, processing_queue, receipt_bucket, receipt_table, main_log_group)
+        lambda_role = self._create_lambda_role(receipt_bucket, database, processing_queue)
+        producer_lambda = self._create_producer_lambda(lambda_role, bot_token, processing_queue, main_log_group, vpc, lambda_security_group, database)
+        consumer_lambda = self._create_consumer_lambda(lambda_role, processing_queue, receipt_bucket, main_log_group, vpc, lambda_security_group, database)
         api_gateway = self._create_api_gateway(producer_lambda, main_log_group)
+
 
         # Setup webhook if bot token is valid
         if bot_token != "placeholder_token_for_bootstrap":
@@ -64,7 +68,7 @@ class ReceiptScannerBotStack(Stack):
 
         # Outputs
         self._create_outputs(
-            api_gateway, receipt_bucket, receipt_table, processing_queue,
+            api_gateway, receipt_bucket, database, processing_queue,
             bot_token, main_log_group, producer_lambda, consumer_lambda
         )
 
@@ -85,39 +89,7 @@ class ReceiptScannerBotStack(Stack):
             auto_delete_objects=True
         )
 
-    def _create_dynamodb_table(self) -> dynamodb.Table:
-        """Create DynamoDB table for receipt data"""
-        table = dynamodb.Table(
-            self, "ReceiptsTable",
-            partition_key=dynamodb.Attribute(name="user_id", type=dynamodb.AttributeType.STRING),
-            sort_key=dynamodb.Attribute(name="receipt_id", type=dynamodb.AttributeType.STRING),
-            billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
-            removal_policy=RemovalPolicy.DESTROY
-        )
-
-        # Add GSI for querying by date
-        table.add_global_secondary_index(
-            index_name="DateIndex",
-            partition_key=dynamodb.Attribute(name="user_id", type=dynamodb.AttributeType.STRING),
-            sort_key=dynamodb.Attribute(name="date", type=dynamodb.AttributeType.STRING)
-        )
-
-        # Add GSI for querying by store
-        table.add_global_secondary_index(
-            index_name="StoreIndex",
-            partition_key=dynamodb.Attribute(name="user_id", type=dynamodb.AttributeType.STRING),
-            sort_key=dynamodb.Attribute(name="store_name", type=dynamodb.AttributeType.STRING)
-        )
-
-        table.add_global_secondary_index(
-            index_name="PaymentMethodIndex",
-            partition_key=dynamodb.Attribute(name="user_id", type=dynamodb.AttributeType.STRING),
-            sort_key=dynamodb.Attribute(name="payment_method", type=dynamodb.AttributeType.STRING)
-        )
-
-        return table
-
-    def _create_lambda_role(self, bucket: s3.Bucket, table: dynamodb.Table, queue: sqs.Queue) -> iam.Role:
+    def _create_lambda_role(self, bucket: s3.Bucket, database: rds.DatabaseInstance, queue: sqs.Queue) -> iam.Role:
         """Create IAM role for Lambda functions"""
         role = iam.Role(
             self, "ReceiptBotLambdaRole",
@@ -145,15 +117,23 @@ class ReceiptScannerBotStack(Stack):
             )
         )
 
+        role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["secretsmanager:GetSecretValue"],
+                resources=[database.secret.secret_arn]
+            )
+        )
+
         bucket.grant_read_write(role)
-        table.grant_read_write_data(role)
         queue.grant_send_messages(role)
         queue.grant_consume_messages(role)
 
         return role
 
     def _create_producer_lambda(self, role: iam.Role, bot_token: str,
-                               queue: sqs.Queue, log_group: logs.LogGroup) -> _lambda.Function:
+                           queue: sqs.Queue, log_group: logs.LogGroup,
+                           vpc: ec2.Vpc, security_group: ec2.SecurityGroup,
+                           database: rds.DatabaseInstance) -> _lambda.Function:
         """Create Producer Lambda (webhook handler - queues messages only)"""
 
         return PythonFunction(
@@ -165,9 +145,13 @@ class ReceiptScannerBotStack(Stack):
             role=role,
             timeout=Duration.seconds(30),  # Short timeout for fast webhook response
             memory_size=256,  # Minimal memory for webhook handling
+            vpc=vpc,
+            security_groups=[security_group],
             environment={
                 "TELEGRAM_BOT_TOKEN": bot_token,
-                "SQS_QUEUE_URL": queue.queue_url,  # Only needs queue URL
+                "SQS_QUEUE_URL": queue.queue_url,
+                "DATABASE_SECRET_ARN": database.secret.secret_arn,
+                "DOCUMENT_STORAGE_PROVIDER": "postgresql"
             },
             log_group=log_group,
             logging_format=_lambda.LoggingFormat.TEXT,
@@ -175,8 +159,9 @@ class ReceiptScannerBotStack(Stack):
         )
 
     def _create_consumer_lambda(self, role: iam.Role, queue: sqs.Queue,
-                               bucket: s3.Bucket, table: dynamodb.Table,
-                               log_group: logs.LogGroup) -> _lambda.Function:
+                           bucket: s3.Bucket, log_group: logs.LogGroup,
+                           vpc: ec2.Vpc, security_group: ec2.SecurityGroup,
+                           database: rds.DatabaseInstance) -> _lambda.Function:
         """Create Consumer Lambda (processes SQS messages)"""
 
         consumer_lambda = PythonFunction(
@@ -188,10 +173,13 @@ class ReceiptScannerBotStack(Stack):
             role=role,
             timeout=Duration.minutes(10),  # Longer timeout for processing
             memory_size=1024,  # More memory for OCR/LLM processing
+            vpc=vpc,
+            security_groups=[security_group],
             environment={
                 "TELEGRAM_BOT_TOKEN": os.getenv('TELEGRAM_BOT_TOKEN'),
                 "S3_BUCKET_NAME": bucket.bucket_name,
-                "DYNAMODB_TABLE_NAME": table.table_name,
+                "DATABASE_SECRET_ARN": database.secret.secret_arn,
+                "DOCUMENT_STORAGE_PROVIDER": "postgresql",
                 "BEDROCK_REGION": os.getenv('BEDROCK_REGION'),
                 "BEDROCK_MODEL_ID": os.getenv('BEDROCK_MODEL_ID'),
                 "OCR_PROVIDER": os.getenv('OCR_PROVIDER'),
@@ -404,9 +392,9 @@ class ReceiptScannerBotStack(Stack):
         )
 
     def _create_outputs(self, api_gateway: apigwv2.HttpApi, bucket: s3.Bucket,
-                       table: dynamodb.Table, queue: sqs.Queue, bot_token: str,
-                       log_group: logs.LogGroup, producer_lambda: _lambda.Function,
-                       consumer_lambda: _lambda.Function) -> None:
+                    database: rds.DatabaseInstance, queue: sqs.Queue, bot_token: str,
+                    log_group: logs.LogGroup, producer_lambda: _lambda.Function,
+                    consumer_lambda: _lambda.Function) -> None:
         """Create stack outputs"""
 
         CfnOutput(
@@ -419,12 +407,6 @@ class ReceiptScannerBotStack(Stack):
             self, "ReceiptsBucketName",
             value=bucket.bucket_name,
             description="S3 bucket for receipt images"
-        )
-
-        CfnOutput(
-            self, "ReceiptsTableName",
-            value=table.table_name,
-            description="DynamoDB table for receipt data"
         )
 
         CfnOutput(
@@ -457,6 +439,18 @@ class ReceiptScannerBotStack(Stack):
             description="Consumer Lambda function name (SQS processor)"
         )
 
+        CfnOutput(
+        self, "DatabaseEndpoint",
+        value=database.instance_endpoint.hostname,
+        description="RDS PostgreSQL endpoint"
+        )
+
+        CfnOutput(
+            self, "DatabaseSecretArn",
+            value=database.secret.secret_arn,
+            description="Database credentials secret ARN"
+        )
+
         if bot_token != "placeholder_token_for_bootstrap":
             CfnOutput(
                 self, "WebhookSetupStatus",
@@ -469,3 +463,112 @@ class ReceiptScannerBotStack(Stack):
                 value="Set TELEGRAM_BOT_TOKEN and redeploy",
                 description="Webhook setup status"
             )
+
+    def _create_database_infrastructure(self) -> tuple[rds.DatabaseInstance, ec2.Vpc, ec2.SecurityGroup]:
+        """Create RDS PostgreSQL instance and minimal VPC"""
+
+        # Create VPC for RDS
+        vpc = ec2.Vpc(
+            self, "ReceiptBotVpc",
+            max_azs=2,
+            nat_gateways=0,  # No NAT needed - saves $45/month
+            subnet_configuration=[
+                ec2.SubnetConfiguration(
+                    name="Database",
+                    subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
+                    cidr_mask=24
+                )
+            ]
+        )
+
+        # Security group for Lambda
+        lambda_security_group = ec2.SecurityGroup(
+            self, "ReceiptBotLambdaSecurityGroup",
+            vpc=vpc,
+            description="Security group for receipt bot lambdas"
+        )
+
+        # Security group for database
+        db_security_group = ec2.SecurityGroup(
+            self, "ReceiptBotDbSecurityGroup",
+            vpc=vpc,
+            description="Security group for receipt bot database"
+        )
+
+        # Allow Lambda to connect to database
+        db_security_group.add_ingress_rule(
+            peer=lambda_security_group,
+            connection=ec2.Port.tcp(5432)
+        )
+
+        # Create database subnet group - FIXED VERSION
+        db_subnet_group = rds.SubnetGroup(
+            self, "DbSubnetGroup",
+            description="Subnet group for database",
+            vpc=vpc,
+            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED)
+        )
+
+        # Create PostgreSQL instance
+        database = rds.DatabaseInstance(
+            self, "ReceiptBotDatabase",
+            engine=rds.DatabaseInstanceEngine.postgres(
+                version=rds.PostgresEngineVersion.VER_17
+            ),
+            instance_type=ec2.InstanceType.of(
+                ec2.InstanceClass.T4G,
+                ec2.InstanceSize.MICRO
+            ),
+            vpc=vpc,
+            subnet_group=db_subnet_group,
+            security_groups=[db_security_group],
+            database_name="receipt_bot",
+            credentials=rds.Credentials.from_generated_secret("postgres"),
+            allocated_storage=20,
+            backup_retention=Duration.days(7),
+            deletion_protection=False,
+            removal_policy=RemovalPolicy.DESTROY
+        )
+
+        return database, vpc, lambda_security_group
+
+    def _create_database_schema(self, database: rds.DatabaseInstance, vpc: ec2.Vpc,
+                            lambda_security_group: ec2.SecurityGroup) -> None:
+        """Create database schema using custom resource"""
+
+        # Create Lambda function for schema initialization from file
+        schema_lambda = PythonFunction(
+            self, "DatabaseSchemaHandler",
+            entry="lambda",
+            runtime=_lambda.Runtime.PYTHON_3_12,
+            index="database_schema_handler.py",
+            handler="lambda_handler",
+            timeout=Duration.minutes(5),
+            vpc=vpc,
+            security_groups=[lambda_security_group],
+            environment={
+                "DATABASE_SECRET_ARN": database.secret.secret_arn
+            }
+        )
+
+        # Grant permissions to read the secret
+        database.secret.grant_read(schema_lambda)
+
+        # Create custom resource provider
+        schema_provider = cr.Provider(
+            self, "DatabaseSchemaProvider",
+            on_event_handler=schema_lambda
+        )
+
+        # Create the custom resource
+        schema_resource = CustomResource(
+            self, "DatabaseSchemaResource",
+            service_token=schema_provider.service_token,
+            properties={
+                'SecretArn': database.secret.secret_arn,
+                'DatabaseEndpoint': database.instance_endpoint.hostname
+            }
+        )
+
+        # Ensure schema is created after database is ready
+        schema_resource.node.add_dependency(database)

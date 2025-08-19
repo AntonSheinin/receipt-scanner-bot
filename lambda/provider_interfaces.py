@@ -5,8 +5,6 @@
 from abc import ABC, abstractmethod
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
-from decimal import Decimal
-from receipt_schemas import ReceiptItem
 
 
 @dataclass
@@ -20,7 +18,7 @@ class OCRResponse:
     store_name: Optional[str] = None
     date: Optional[str] = None
     receipt_number: Optional[str] = None
-    total: Optional[Decimal] = None
+    total: Optional[float] = None
     payment_method: Optional[str] = None
     items: List[Dict] = field(default_factory=list)
     confidence: float = 0.0
@@ -72,54 +70,70 @@ class ImageStorage(ABC):
         """Check if image exists"""
         pass
 
-
 class DocumentStorage(ABC):
     """Interface for storing and retrieving documents/records"""
 
+    # ======================
+    # Core Receipt Operations
+    # ======================
+
     @abstractmethod
-    def put(self, table: str, item: Dict[str, Any]) -> bool:
-        """Store document"""
+    def save_receipt_with_items(self, user_id: str, receipt_data: Dict[str, Any]) -> bool:
+        """Store receipt with all its items in one operation"""
         pass
 
     @abstractmethod
-    def get(self, table: str, key: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Retrieve document by key"""
+    def get_filtered_receipts(self, user_id: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+        """Get receipts with optional filtering using SQL optimization
+
+        If filters is None or empty, returns all user receipts.
+
+        filters format:
+        {
+            'date_range': {'start': '2024-01-01', 'end': '2024-12-31'},
+            'store_names': ['רמי לוי', 'שופרסל'],
+            'categories': ['food', 'beverages'],
+            'subcategories': ['dairy_eggs', 'bread_bakery'],
+            'item_keywords': ['חלב', 'לחם'],
+            'payment_methods': ['cash', 'credit_card'],
+            'price_range': {'min': 10, 'max': 100},
+            'limit': 50
+        }
+        """
         pass
 
     @abstractmethod
-    def query(self, table: str, key_condition: Dict[str, Any],
-              filter_expression: Optional[Dict] = None,
-              index_name: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Query documents"""
+    def delete_receipt(self, user_id: str, receipt_id: str) -> bool:
+        """Delete specific receipt (items cascade automatically)"""
+        pass
+
+    # ======================
+    # Efficient Bulk Operations
+    # ======================
+
+    @abstractmethod
+    def delete_last_uploaded_receipt(self, user_id: str) -> Optional[str]:
+        """Delete most recent receipt and return image_url for cleanup
+
+        Returns the image_url of the deleted receipt or None if no receipts found.
+        Should use SQL ORDER BY created_at DESC LIMIT 1 for efficiency.
+        """
         pass
 
     @abstractmethod
-    def scan(self, table: str, filter_expression: Optional[Dict] = None,
-             limit: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Scan all documents"""
+    def delete_all_receipts(self, user_id: str) -> List[str]:
+        """Delete all user receipts and return image_urls for cleanup
+
+        Returns list of image_urls for the deleted receipts (excluding nulls).
+        Should use SQL RETURNING clause for efficiency.
+        """
         pass
 
     @abstractmethod
-    def delete(self, table: str, key: Dict[str, Any]) -> bool:
-        """Delete document"""
-        pass
+    def count_user_receipts(self, user_id: str) -> int:
+        """Count total receipts for user using efficient SQL COUNT()
 
-    @abstractmethod
-    def query_by_date_range(self, table: str, user_id: str, start_date: str, end_date: str) -> List[Dict[str, Any]]:
-        """Query documents by date range"""
-        pass
-
-    @abstractmethod
-    def query_by_stores(self, table: str, user_id: str, store_names: List[str]) -> List[Dict[str, Any]]:
-        """Query documents by store names"""
-        pass
-
-    @abstractmethod
-    def query_by_payment_methods(self, table: str, user_id: str, payment_methods: List[str]) -> List[Dict[str, Any]]:
-        """Query documents by payment methods"""
-        pass
-
-    @abstractmethod
-    def query_user_receipts(self, table: str, user_id: str) -> List[Dict[str, Any]]:
-        """Query all receipts for a user"""
+        This should use SELECT COUNT(*) FROM receipts WHERE user_id = ?
+        and NOT pull any actual receipt data for performance.
+        """
         pass

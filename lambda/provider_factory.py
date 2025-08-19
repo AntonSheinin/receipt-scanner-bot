@@ -9,7 +9,7 @@ from utils.llm.openai_provider import OpenAIProvider
 from utils.ocr.aws_textract_provider import TextractProvider
 from utils.ocr.google_vision_provider import GoogleVisionProvider
 from utils.storage.s3_storage_provider import S3StorageProvider
-from utils.storage.dynamodb_storage_provider import DynamoDBStorageProvider
+from utils.storage.postgresql_storage_provider import PostgreSQLStorageProvider
 
 
 class ProviderFactory:
@@ -30,7 +30,7 @@ class ProviderFactory:
     }
 
     _document_storage_providers: Dict[str, Type[DocumentStorage]] = {
-        'dynamodb': DynamoDBStorageProvider
+        'postgresql': PostgreSQLStorageProvider
     }
 
     @classmethod

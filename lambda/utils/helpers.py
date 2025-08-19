@@ -14,37 +14,6 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def convert_floats_to_decimals(obj: Any) -> Any:
-    """
-        Recursively convert float and numeric values to Decimal for DynamoDB storage
-    """
-    if obj is None:
-        return None
-    elif isinstance(obj, (int, float)):
-        return Decimal(str(obj))
-    elif isinstance(obj, dict):
-        return {k: convert_floats_to_decimals(v) for k, v in obj.items()}
-    elif isinstance(obj, list):
-        return [convert_floats_to_decimals(item) for item in obj]
-    else:
-        return obj
-
-def convert_decimals_to_floats(obj: Any) -> Any:
-    """
-        Recursively convert Decimal objects to float
-    """
-
-    if isinstance(obj, Decimal):
-        return float(obj)
-
-    if isinstance(obj, dict):
-        return {k: convert_decimals_to_floats(v) for k, v in obj.items()}
-
-    if isinstance(obj, list):
-        return [convert_decimals_to_floats(v) for v in obj]
-
-    return obj
-
 def normalize_date(date_str: str) -> Optional[str]:
         """Normalize date to YYYY-MM-DD format"""
         if not date_str:

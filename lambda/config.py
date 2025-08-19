@@ -3,6 +3,7 @@
 """
 
 import os
+import json
 import logging
 import boto3
 
@@ -12,7 +13,6 @@ AWS_REGION = os.environ.get('AWS_REGION')
 BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
 BEDROCK_MODEL_ID = os.environ.get('BEDROCK_MODEL_ID')
 S3_BUCKET_NAME = os.environ.get('S3_BUCKET_NAME')
-DYNAMODB_TABLE_NAME = os.environ.get('DYNAMODB_TABLE_NAME')
 BEDROCK_REGION = os.environ.get('BEDROCK_REGION')
 
 USER_ID_SALT = os.environ.get('USER_ID_SALT', 'receipt-scanner-bot-default-salt-change-in-production')
@@ -33,14 +33,33 @@ MAX_ITEM_NAME_LENGTH = 20
 
 MAX_RECEIPTS_PER_USER = 100
 
+# Database Configuration
+DATABASE_SECRET_ARN = os.environ.get('DATABASE_SECRET_ARN')
+
 # AWS Clients (singleton pattern)
 _bedrock_client = None
 _s3_client = None
-_dynamodb = None
-_receipts_table = None
 _sqs_client = None
 
 SQS_QUEUE_URL = os.environ.get('SQS_QUEUE_URL')
+
+
+def get_database_connection_info():
+    """Get database connection info from AWS Secrets Manager"""
+    if not DATABASE_SECRET_ARN:
+        raise ValueError("DATABASE_SECRET_ARN not configured")
+
+    secrets_client = boto3.client('secretsmanager')
+    secret_response = secrets_client.get_secret_value(SecretId=DATABASE_SECRET_ARN)
+    secret = json.loads(secret_response['SecretString'])
+
+    return {
+        'host': secret['host'],
+        'port': secret['port'],
+        'database': secret['dbname'],
+        'user': secret['username'],
+        'password': secret['password']
+    }
 
 
 def get_sqs_client():
@@ -66,21 +85,6 @@ def get_s3_client():
         _s3_client = boto3.client('s3')
     return _s3_client
 
-
-def get_dynamodb():
-    """Get DynamoDB resource (singleton)"""
-    global _dynamodb
-    if _dynamodb is None:
-        _dynamodb = boto3.resource('dynamodb')
-    return _dynamodb
-
-
-def get_receipts_table():
-    """Get receipts table (singleton)"""
-    global _receipts_table
-    if _receipts_table is None and DYNAMODB_TABLE_NAME:
-        _receipts_table = get_dynamodb().Table(DYNAMODB_TABLE_NAME)
-    return _receipts_table
 
 def setup_logging():
     """Setup logging configuration"""
