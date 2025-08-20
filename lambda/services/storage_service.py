@@ -99,16 +99,13 @@ class StorageService:
     def get_filtered_receipts(self, query_plan: Dict, user_id: str) -> List[Dict[str, Any]]:
         """Get filtered receipts with business logic"""
 
-        # Business logic: Extract and prepare filters
         filters = query_plan.get("filter", {})
 
-        # Business rule: Transform domain filters to provider format
         provider_filters = self._prepare_filters_for_provider(filters)
 
         try:
             receipts = self.document_storage.get_filtered_receipts(user_id, provider_filters)
 
-            # Business logic: Log results for monitoring
             logger.info(f"Found {len(receipts)} receipts for user {user_id[:8]}...")
 
             return receipts

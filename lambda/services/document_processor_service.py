@@ -42,11 +42,7 @@ class LLMProcessingStrategy(ReceiptProcessingStrategy):
         logger.info("Processing receipt with LLM only")
 
         try:
-            result = self.llm.analyze_receipt(image_data)
-            if result:
-                result['processing_method'] = 'llm'
-
-            return result
+            return self.llm.analyze_receipt(image_data)
 
         except Exception as e:
             logger.error(f"LLM-only processing error: {e}")
@@ -98,10 +94,6 @@ class PPOCRLLMProcessingStrategy(ReceiptProcessingStrategy):
         enhanced_image = self.image_preprocessor.enhance_image(image_data)
 
         result = self.ocr_llm_strategy.process(enhanced_image)
-
-        # Update processing method in metadata
-        if result and result.processing_metadata:
-            result.processing_metadata['processing_method'] = 'pp_ocr_llm'
 
         return result
 

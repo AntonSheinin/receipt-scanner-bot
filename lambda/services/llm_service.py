@@ -8,6 +8,7 @@ import logging
 import json
 from config import setup_logging
 from provider_factory import ProviderFactory
+from provider_interfaces import LLMResponse
 from utils.llm.prompts import PromptManager
 from receipt_schemas import ReceiptAnalysisResult
 from pydantic import ValidationError
@@ -34,7 +35,6 @@ class LLMService:
         # Parse JSON and validate with Pydantic
         return self._create_validated_result(
             response.content,
-            processing_method='llm'
         ) if response else None
 
     def structure_ocr_text(self, ocr_text: str) -> Optional[ReceiptAnalysisResult]:
@@ -48,7 +48,6 @@ class LLMService:
         return self._create_validated_result(
             response.content,
             raw_text=ocr_text,
-            processing_method='ocr_llm'
         ) if response else None
 
     @staticmethod
@@ -96,7 +95,7 @@ class LLMService:
         except json.JSONDecodeError:
             return None
 
-    def _create_validated_result(self, llm_content: str, raw_text: str = None, processing_method: str = None) -> Optional[ReceiptAnalysisResult]:
+    def _create_validated_result(self, llm_content: str, raw_text: str = None) -> Optional[ReceiptAnalysisResult]:
         """Parse LLM response and validate with strict Pydantic validation"""
 
         # Parse JSON from LLM response
@@ -109,8 +108,7 @@ class LLMService:
         try:
             return ReceiptAnalysisResult.from_llm_response(
                 llm_data=parsed_data,
-                raw_text=raw_text,
-                processing_method=processing_method
+                raw_text=raw_text
             )
 
         except ValidationError as e:
@@ -120,3 +118,29 @@ class LLMService:
         except Exception as e:
             logger.error(f"Unexpected error creating receipt result: {e}")
             return None
+
+    def generate_filter_plan(self, user_query: str) -> Optional[Dict]:
+        """Generate query plan from LLM response"""
+
+        logger.info("Generating filter plan with LLM")
+
+        prompt = self.prompt_manager.get_filter_plan_prompt(user_query)
+        response = self.provider.generate_text(prompt, max_tokens=1000)
+
+        if not response:
+            logger.error("No response from LLM for filter plan")
+            return None
+
+        # Parse JSON response
+        parsed_plan = self.parse_json_response(response.content)
+
+        if not parsed_plan:
+            logger.error("Failed to parse filter plan JSON from LLM")
+            return None
+
+        logger.info(f"Generated filter plan: {parsed_plan}")
+        return parsed_plan
+
+    def generate_text(self, prompt: str, max_tokens: int = 3000) -> Optional[LLMResponse]:
+        """Generate text using the LLM provider"""
+        return self.provider.generate_text(prompt, max_tokens)

@@ -65,7 +65,7 @@ Extract the following information in valid JSON format ONLY (no additional text 
 
 {
     "store_name": "name of the store/business",
-    "date": "date in YYYY-MM-DD format",
+    "purchasing_date": "date in YYYY-MM-DD format",
     "receipt_number": "receipt/transaction number if available",
     "payment_method": "cash|credit_card|other",
     "items": [
@@ -113,6 +113,7 @@ CRITICAL DATE PARSING RULES:
 - ALWAYS output date in YYYY-MM-DD format
 - If date is ambiguous, use context clues (receipt freshness, other dates on receipt)
 - If unable to determine year definitively, assume current decade (202X)
+- carefully check that the final date is valid and correctly formatted
 
 CRITICAL ITEM PARSING RULES:
 - Lines starting with a number (product code/barcode) mark the START of a new item
@@ -293,7 +294,7 @@ Return ONLY valid JSON with all required fields, no explanations.
 """
 
     @staticmethod
-    def get_filter_plan_prompt(question: str) -> str:
+    def get_filter_plan_prompt(user_query: str) -> str:
         """Generate filtering-only query plan (no sorting or aggregation)"""
         current_date = datetime.now(timezone.utc)
         current_month = current_date.strftime('%Y-%m')
@@ -312,7 +313,7 @@ Last month: {last_month}
 
 Available categories/subcategories codes taxonomy: {taxonomy_json}
 
-User question: "{question}"
+User question: "{user_query}"
 
 Generate a JSON filtering plan with this structure - ONLY include fields that are actually needed for filtering:
 {{
@@ -320,7 +321,7 @@ Generate a JSON filtering plan with this structure - ONLY include fields that ar
 }}
 
 Available filter fields (only include if relevant):
-- "item_keywords": ["keyword1", "keyword2"] - MUST be in Hebrew since receipts are Hebrew
+- "item_keywords": ["keyword1", "keyword2"] - MUST be in Hebrew since receipts are Hebrew, if user wants to filter by item names only
 - "categories": ["category"] - main categories codes from taxonomy
 - "subcategories": ["subcategory"] - specific subcategories codes from taxonomy
 - "date_range": {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}}
@@ -337,12 +338,15 @@ Rules:
 - Only set limit when you want to restrict results (10-100)
 - NO SORTING - the LLM will handle any sorting/ordering in the response
 
-CRITICAL: Return keywords in Hebrew characters.
+CRITICAL: Return keywords in Hebrew characters only if user wants to filter by item names only. Don't include
+keywords at all if user want to filter by category or subcategory. Only include keywords with category and/or subcategory
+if user want to filter both all category/subcategory items with certain items.
 
-Examples of Hebrew keywords:
-- For alcohol: ["אלכוהול", "יין", "בירה", "ויסקי"]
-- For food: ["לחם", "חלב", "בשר", "ירקות"]
-- For household: ["סבון", "חומרי ניקוי", "נייר טואלט"]
+For example:
+- If user wants to filter by item names: "חלב", "לחם" - include keywords "חלב", "לחם"
+- If user wants to filter by category: "מזון" - include category "מזון" only without keywords
+- If user wants to filter by subcategory: "חלב ומוצרי חלב" - include subcategory "חלב ומוצרי חלב" only without keywords
+- if user wants to filter by both category and item names: "מזון", "מרכך" - include category "מזון" and keywords "מרכך"
 
 CRITICAL: Return ONLY the JSON object. No explanations or comments."""
 

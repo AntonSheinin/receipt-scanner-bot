@@ -5,8 +5,8 @@
 import logging
 import uuid
 from typing import Optional, Dict, List, Any
-import psycopg2
-import psycopg2.extras
+import psycopg
+from psycopg.rows import dict_row
 from provider_interfaces import DocumentStorage
 from config import setup_logging, get_database_connection_info
 import json
@@ -20,25 +20,25 @@ class PostgreSQLStorageProvider(DocumentStorage):
 
     def __init__(self):
         self.connection_info = get_database_connection_info()
+        self._connection_string = self._build_connection_string()
 
-    def _get_connection(self):
-        """Get database connection"""
-        return psycopg2.connect(
-            host=self.connection_info['host'],
-            port=self.connection_info['port'],
-            database=self.connection_info['database'],
-            user=self.connection_info['user'],
-            password=self.connection_info['password'],
-            cursor_factory=psycopg2.extras.RealDictCursor
+    def _build_connection_string(self) -> str:
+        """Build psycopg3 connection string"""
+        return (
+            f"host={self.connection_info['host']} "
+            f"port={self.connection_info['port']} "
+            f"dbname={self.connection_info['database']} "
+            f"user={self.connection_info['user']} "
+            f"password={self.connection_info['password']}"
         )
 
     def _execute_query(self, query: str, params: tuple = ()) -> List[Dict[str, Any]]:
         """Execute query and return results"""
         try:
-            with self._get_connection() as conn:
+            with psycopg.connect(self._connection_string, row_factory=dict_row) as conn:
                 with conn.cursor() as cursor:
                     cursor.execute(query, params)
-                    return [dict(row) for row in cursor.fetchall()]
+                    return cursor.fetchall()
         except Exception as e:
             logger.error(f"Query error: {e}")
             return []
@@ -51,11 +51,11 @@ class PostgreSQLStorageProvider(DocumentStorage):
     def _execute_update(self, query: str, params: tuple = ()) -> bool:
         """Execute update and return success"""
         try:
-            with self._get_connection() as conn:
+            with psycopg.connect(self._connection_string) as conn:
                 with conn.cursor() as cursor:
                     cursor.execute(query, params)
-                    conn.commit()
                     return True
+
         except Exception as e:
             logger.error(f"Update error: {e}")
             return False
@@ -66,7 +66,7 @@ class PostgreSQLStorageProvider(DocumentStorage):
         receipt_id = receipt_data.get('receipt_id', str(uuid.uuid4()))
 
         try:
-            with self._get_connection() as conn:
+            with psycopg.connect(self._connection_string) as conn:
                 with conn.cursor() as cursor:
                     # Insert receipt
                     cursor.execute("""
@@ -75,7 +75,7 @@ class PostgreSQLStorageProvider(DocumentStorage):
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (id) DO UPDATE SET
                             store_name = EXCLUDED.store_name,
-                            date = EXCLUDED.date,
+                            purchasing_date = EXCLUDED.purchasing_date,
                             total = EXCLUDED.total,
                             payment_method = EXCLUDED.payment_method,
                             receipt_number = EXCLUDED.receipt_number,
@@ -119,7 +119,7 @@ class PostgreSQLStorageProvider(DocumentStorage):
             if filters.get('date_range'):
                 dr = filters['date_range']
                 if dr.get('start') and dr.get('end'):
-                    where_conditions.append("r.date BETWEEN %s AND %s")
+                    where_conditions.append("r.purchasing_date BETWEEN %s AND %s")
                     params.extend([dr['start'], dr['end']])
 
             # Store names
@@ -165,19 +165,35 @@ class PostgreSQLStorageProvider(DocumentStorage):
         limit_clause = f" LIMIT {int(filters['limit'])}" if filters and filters.get('limit') else ""
 
         query = f"""
-            SELECT r.*,
-                   COALESCE(JSON_AGG(
-                       JSON_BUILD_OBJECT(
-                           'name', i.name, 'price', i.price, 'quantity', i.quantity,
-                           'category', i.category, 'subcategory', i.subcategory, 'discount', i.discount
-                       ) ORDER BY i.name
-                   ) FILTER (WHERE i.id IS NOT NULL), '[]'::json) as items
+            SELECT
+                r.store_name,
+                r.payment_method,
+                r.receipt_number,
+                r.purchasing_date::text AS purchasing_date,
+                r.total::float8 AS total,
+                r.created_at::text AS created_at,
+
+                -- Aggregate items as JSON
+                COALESCE(
+                    JSON_AGG(
+                        JSON_BUILD_OBJECT(
+                            'name', i.name,
+                            'price', i.price::float8,
+                            'quantity', i.quantity::float8,
+                            'category', i.category,
+                            'subcategory', i.subcategory,
+                            'discount', i.discount::float8
+                        ) ORDER BY i.name
+                    ) FILTER (WHERE i.id IS NOT NULL),
+                    '[]'::json
+                ) AS items
+
             FROM receipts r
             LEFT JOIN receipt_items i ON r.id = i.receipt_id
             WHERE {where_clause}
             GROUP BY r.id
-            ORDER BY r.date DESC, r.created_at DESC
-            {limit_clause}
+            ORDER BY r.purchasing_date DESC, r.created_at DESC
+            {limit_clause};
         """
 
         results = self._execute_query(query, tuple(params))

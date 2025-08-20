@@ -164,23 +164,12 @@ class OrchestratorService:
         self.telegram_service.send_typing(chat_id)
         secure_user_id = get_secure_user_id(chat_id)
 
-        deleted_receipt = self.storage_service.delete_last_uploaded_receipt(secure_user_id)
+        is_deleted = self.storage_service.delete_last_uploaded_receipt(secure_user_id)
 
-        if deleted_receipt:
-            store_name = deleted_receipt.get('store_name', 'Unknown Store')
-            receipt_date = deleted_receipt.get('date', 'Unknown Date')
-            upload_date = deleted_receipt.get('created_at', 'Unknown Upload Date')
-            total = deleted_receipt.get('total', '0.00')
+        if is_deleted:
+            message = "🗑️ הקבלה האחרונה נמחקה בהצלחה\n\n"
 
-            message = (
-                "🗑️ הקבלה האחרונה נמחקה בהצלחה\n\n"
-                f"🏪 חנות: {store_name}\n"
-                f"📅 תאריך קבלה: {receipt_date}\n"
-                f"📤 תאריך העלאה: {upload_date[:10]}\n"
-                f"💰 סך הכל: {total} שח\n"
-            )
-
-            logger.info(f"Deleted last uploaded receipt {deleted_receipt['receipt_id']}")
+            logger.info(f"Deleted last uploaded receipt")
         else:
             message = "❌ לא נמצאו קבלות למחיקה. אין קבלות שמורות כרגע."
             logger.info("No receipts found to delete")

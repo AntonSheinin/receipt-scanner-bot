@@ -97,8 +97,8 @@ class ReceiptService:
             if receipt_data.store_name:
                 response += f"🏪 חנות : {receipt_data.store_name}\n"
 
-            if receipt_data.date:
-                response += f"📅 תאריך : {receipt_data.date}\n"
+            if receipt_data.purchasing_date:
+                response += f"📅 תאריך : {receipt_data.purchasing_date}\n"
 
             if receipt_data.receipt_number:
                 response += f"🧾 מס׳ קבלה : {receipt_data.receipt_number}\n"
@@ -175,17 +175,7 @@ class ReceiptService:
             if receipt_data.total:
                 response += f"\n💰 סה״כ : ₪{receipt_data.total:.2f}"
 
-            response += f"\n✅ נשמר בהצלחה במסד הנתונים "
-
-            # Processing method indicator (if available)
-            if result.processing_metadata and result.processing_metadata.get('processing_method'):
-                method = result.processing_metadata['processing_method']
-                methods = {
-                    'llm': 'LLM',
-                    'ocr_llm': 'OCR + LLM',
-                    'pp_ocr_llm': 'Enhanced OCR + LLM'
-                }
-                response += f"\n\n{methods.get(method, '🔍')}"
+            response += "\n✅ נשמר בהצלחה במסד הנתונים"
 
             return response
 

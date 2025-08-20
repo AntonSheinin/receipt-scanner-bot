@@ -1,10 +1,10 @@
 """
-    Database Schema Creation Lambda Handler
+Database Schema Creation Lambda Handler
 """
 
 import os
 import json
-import psycopg2
+import psycopg
 import boto3
 import urllib3
 import logging
@@ -44,73 +44,69 @@ def create_database_schema(event):
     db_user = os.getenv('DB_USER')
     db_password = os.getenv('DB_PASSWORD')
 
-    # Connect to database
-    conn = psycopg2.connect(
-        host=db_host,
-        port=db_port,
-        database=db_name,
-        user=db_user,
-        password=db_password
+    # Build connection string for psycopg3
+    connection_string = (
+        f"host={db_host} port={db_port} dbname={db_name} "
+        f"user={db_user} password={db_password}"
     )
 
-    cursor = conn.cursor()
+    with psycopg.connect(connection_string) as conn:
+        with conn.cursor() as cursor:
+            try:
+                # Create receipts table
+                logger.info("Creating receipts table...")
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS receipts (
+                        id UUID PRIMARY KEY,
+                        user_id VARCHAR(64) NOT NULL,
+                        store_name VARCHAR(100),
+                        date DATE,
+                        total DECIMAL(10,2),
+                        payment_method VARCHAR(20),
+                        receipt_number VARCHAR(50),
+                        image_url TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
 
-    try:
-        # Create receipts table
-        logger.info("Creating receipts table...")
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS receipts (
-                id UUID PRIMARY KEY,
-                user_id VARCHAR(64) NOT NULL,
-                store_name VARCHAR(100),
-                date DATE,
-                total DECIMAL(10,2),
-                payment_method VARCHAR(20),
-                receipt_number VARCHAR(50),
-                image_url TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+                # Create receipt_items table
+                logger.info("Creating receipt_items table...")
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS receipt_items (
+                        id UUID PRIMARY KEY,
+                        receipt_id UUID NOT NULL REFERENCES receipts(id) ON DELETE CASCADE,
+                        name VARCHAR(200) NOT NULL,
+                        price DECIMAL(10,2) NOT NULL,
+                        quantity DECIMAL(8,3) NOT NULL DEFAULT 1,
+                        category VARCHAR(50),
+                        subcategory VARCHAR(50),
+                        discount DECIMAL(10,2) DEFAULT 0
+                    )
+                """)
 
-        # Create receipt_items table
-        logger.info("Creating receipt_items table...")
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS receipt_items (
-                id UUID PRIMARY KEY,
-                receipt_id UUID NOT NULL REFERENCES receipts(id) ON DELETE CASCADE,
-                name VARCHAR(200) NOT NULL,
-                price DECIMAL(10,2) NOT NULL,
-                quantity DECIMAL(8,3) NOT NULL DEFAULT 1,
-                category VARCHAR(50),
-                subcategory VARCHAR(50),
-                discount DECIMAL(10,2) DEFAULT 0
-            )
-        """)
+                # Create indexes for performance
+                logger.info("Creating indexes...")
 
-        # Create indexes for performance
-        logger.info("Creating indexes...")
+                # Receipts indexes
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_receipts_user_id ON receipts(user_id)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_receipts_date ON receipts(date)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_receipts_user_date ON receipts(user_id, date)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_receipts_store ON receipts(store_name)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_receipts_payment ON receipts(payment_method)')
 
-        # Receipts indexes
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_receipts_user_id ON receipts(user_id)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_receipts_date ON receipts(date)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_receipts_user_date ON receipts(user_id, date)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_receipts_store ON receipts(store_name)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_receipts_payment ON receipts(payment_method)')
+                # Items indexes
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_items_receipt_id ON receipt_items(receipt_id)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_items_category ON receipt_items(category)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_items_subcategory ON receipt_items(subcategory)')
 
-        # Items indexes
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_items_receipt_id ON receipt_items(receipt_id)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_items_category ON receipt_items(category)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_items_subcategory ON receipt_items(subcategory)')
+                # Full-text search index for Hebrew item names
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_items_name_fts ON receipt_items USING gin(to_tsvector(\'simple\', name))')
 
-        # Full-text search index for Hebrew item names
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_items_name_fts ON receipt_items USING gin(to_tsvector(\'simple\', name))')
+                logger.info("Database schema created successfully")
 
-        conn.commit()
-        logger.info("Database schema created successfully")
-
-    finally:
-        cursor.close()
-        conn.close()
+            except Exception as e:
+                logger.error(f"Schema creation error: {e}")
+                raise
 
 
 def send_response(event, context, status, data):

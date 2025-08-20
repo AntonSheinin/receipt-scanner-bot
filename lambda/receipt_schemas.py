@@ -6,7 +6,8 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List, Literal, Dict, Any
 from decimal import Decimal, InvalidOperation
 from utils.category_manager import category_manager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone, date
+from dateutil import parser as date_parser
 import re
 import logging
 from config import setup_logging
@@ -147,10 +148,10 @@ class ReceiptData(BaseModel):
         max_length=100,
         description="Store/business name (required)"
     )
-    date: str = Field(
-        pattern=r'^\d{4}-\d{2}-\d{2}$',
-        description="Receipt date in YYYY-MM-DD format (required)"
+    purchasing_date: date = Field(
+        description="Receipt date (required)"
     )
+
     payment_method: Literal["cash", "credit_card", "other"] = Field(
         description="Payment method used (required)"
     )
@@ -168,16 +169,7 @@ class ReceiptData(BaseModel):
         default_factory=list,
         description="List of receipt items (can be empty for simple receipts)"
     )
-    processing_method: Optional[str] = Field(
-        default=None,
-        description="How the receipt was processed (llm, ocr_llm, etc.)"
-    )
-    confidence: Optional[float] = Field(
-        default=None,
-        ge=0.0,
-        le=100.0,
-        description="OCR confidence score (0-100)"
-    )
+
 
     @field_validator('store_name')
     @classmethod
@@ -190,65 +182,26 @@ class ReceiptData(BaseModel):
 
         return cleaned
 
-    @field_validator('date')
-    @classmethod
-    def validate_date_format(cls, v: str) -> str | None:
-        """Validate date format and ensure it's not more than 6 months old"""
-        cleaned = v.strip()
-        if not cleaned:
-            logger.error("Date validation failed: empty date provided")
-            raise ValueError("Date cannot be empty")
+    @field_validator("purchasing_date", mode="before")
+    def validate_and_parse_date(cls, v: str) -> date:
+        """Convert string to date and validate constraints"""
 
-        # Try to parse various date formats and normalize to YYYY-MM-DD
-        date_patterns = [
-            (r'^(\d{4})-(\d{2})-(\d{2})$', '%Y-%m-%d'),     # Already correct
-            (r'^(\d{2})/(\d{2})/(\d{4})$', '%d/%m/%Y'),     # DD/MM/YYYY
-            (r'^(\d{2})\.(\d{2})\.(\d{4})$', '%d.%m.%Y'),   # DD.MM.YYYY
-            (r'^(\d{2})-(\d{2})-(\d{4})$', '%d-%m-%Y'),     # DD-MM-YYYY
-            (r'^(\d{2})/(\d{2})/(\d{2})$', '%d/%m/%y'),     # DD/MM/YY
-            (r'^(\d{2})\.(\d{2})\.(\d{2})$', '%d.%m.%y'),   # DD.MM.YY
-        ]
+        # Try parsing with dateutil (handles most formats automatically)
+        try:
+            parsed = date_parser.parse(v, dayfirst=False).date()
+        except Exception:
+            raise ValueError("Unrecognized date format")
 
-        parsed_date: Optional[datetime] = None
-        normalized_date: Optional[str] = None
+        today = date.today()
+        six_months_ago = today - timedelta(days=180)  # strict ~6 months window
 
-        for pattern, date_format in date_patterns:
-            if re.match(pattern, cleaned):
-                try:
-                    parsed_date = datetime.strptime(cleaned, date_format)
+        if parsed > today:
+            raise ValueError("Date cannot be in the future")
 
-                    # Handle 2-digit years - always assume 20XX for Israeli receipts
-                    if parsed_date.year < 100:
-                        parsed_date = parsed_date.replace(year=parsed_date.year + 2000)
-                    elif parsed_date.year < 1950:  # Handle edge case
-                        parsed_date = parsed_date.replace(year=parsed_date.year + 2000)
+        if parsed < six_months_ago:
+            raise ValueError("Date cannot be older than 6 months")
 
-                    normalized_date = parsed_date.strftime('%Y-%m-%d')
-                    break
-
-                except ValueError:
-                    continue
-
-        if not parsed_date:
-            logger.error(f"Date validation failed: invalid format '{cleaned}'")
-            raise ValueError(f"Invalid date format: {cleaned}")
-
-        # Use timezone-aware datetime for consistency
-        from datetime import timezone
-        now = datetime.now(timezone.utc).replace(tzinfo=None)  # Remove timezone for comparison
-        six_months_ago = now - timedelta(days=180)
-        tomorrow = now + timedelta(days=1)
-
-        if parsed_date < six_months_ago:
-            logger.warning(f"Receipt date is old (more than 6 months): {normalized_date}")
-            # Don't fail for old dates - just warn
-            # raise ValueError(f"Receipt date is too old (more than 6 months): {normalized_date}")
-
-        if parsed_date > tomorrow:
-            logger.error(f"Date validation failed: future date provided: {normalized_date}")
-            raise ValueError(f"Receipt date is in the future: {normalized_date}")
-
-        return normalized_date
+        return parsed
 
     @field_validator('payment_method')
     @classmethod
@@ -323,8 +276,8 @@ class ReceiptData(BaseModel):
             missing_fields.append("store_name")
         if self.total is None:
             missing_fields.append("total")
-        if not self.date:
-            missing_fields.append("date")
+        if not self.purchasing_date:
+            missing_fields.append("purchasing_date")
         if not self.payment_method:
             missing_fields.append("payment_method")
 
@@ -353,13 +306,6 @@ class ReceiptData(BaseModel):
             elif difference > 0:
                 logger.warning(f"Small total discrepancy detected: {difference} (within tolerance)")
 
-        # Log processing metadata if available
-        if self.processing_method:
-            logger.info(f"Receipt processed using method: {self.processing_method}")
-
-        if self.confidence is not None:
-            logger.info(f"Receipt processing confidence: {self.confidence}%")
-
         return self
 
     def get_json_schema(self) -> dict:
@@ -370,7 +316,7 @@ class ReceiptData(BaseModel):
 
     def get_summary(self) -> str:
         """Get human-readable receipt summary for logging"""
-        summary = f"Receipt: {self.store_name} | {self.date} | {len(self.items)} items | Total: {self.total} | Payment: {self.payment_method}"
+        summary = f"Receipt: {self.store_name} | {self.purchasing_date} | {len(self.items)} items | Total: {self.total} | Payment: {self.payment_method}"
         if self.receipt_number:
             summary += f" | Ref: {self.receipt_number}"
         return summary
@@ -383,8 +329,7 @@ class ReceiptAnalysisResult(BaseModel):
     processing_metadata: Optional[Dict[str, Any]] = Field(default=None, description="Processing metadata")
 
     @classmethod
-    def from_llm_response(cls, llm_data: Dict[str, Any], raw_text: Optional[str] = None,
-                         processing_method: Optional[str] = None) -> 'ReceiptAnalysisResult':
+    def from_llm_response(cls, llm_data: Dict[str, Any], raw_text: Optional[str] = None) -> 'ReceiptAnalysisResult':
         """Create validated result from LLM response data"""
 
         # Convert items to use subcategory field for backward compatibility
@@ -396,24 +341,9 @@ class ReceiptAnalysisResult(BaseModel):
 
         receipt_data = ReceiptData(**llm_data)
 
-        metadata = {'processing_method': processing_method} if processing_method else None
-
         return cls(
             receipt_data=receipt_data,
             raw_text=raw_text,
-            processing_metadata=metadata
         )
-
-    def get_processing_method(self) -> Optional[str]:
-        """Get processing method from metadata"""
-        if self.processing_metadata:
-            return self.processing_metadata.get('processing_method')
-        return None
-
-    def get_confidence(self) -> Optional[float]:
-        """Get OCR confidence from metadata"""
-        if self.processing_metadata:
-            return self.processing_metadata.get('ocr_confidence')
-        return None
 
 

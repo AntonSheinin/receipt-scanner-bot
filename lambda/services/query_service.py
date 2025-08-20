@@ -75,26 +75,28 @@ class QueryService:
             self.telegram.send_message(chat_id, "❌ הייתה בעיה בעיבוד השאלתך.")
             return create_response(200, {"status": "error"})
 
-    def _generate_filter_plan(self, question: str) -> Optional[Dict]:
+    def _generate_filter_plan(self, user_query: str) -> Optional[Dict]:
         """Generate filtering-only query plan using LLM"""
 
-        prompt = self.prompts.get_filter_plan_prompt(question)
-
         try:
-            return self.llm.generate_query_plan(prompt)
+            filter_plan = self.llm.generate_filter_plan(user_query)
+
         except Exception as e:
             logger.error(f"Filter plan error: {e}")
             return None
 
+        try:
+            filter_plan = self._validate_filter_plan(filter_plan)
+            logger.info(f"Cleaned filter plan: {json.dumps(filter_plan, indent=2)}")
+
+        except Exception as e:
+            logger.error(f"Filter plan validation error: {e}")
+            return None
+
+        return filter_plan
+
     def _get_filtered_receipts(self, query_plan: Dict, user_id: str) -> List[Dict[str, Any]]:
         """Get and filter receipts - simplified version without sorting"""
-        try:
-            # Validate and clean query plan
-            query_plan = self._validate_filter_plan(query_plan)
-            logger.info(f"Cleaned filter plan: {json.dumps(query_plan, indent=2)}")
-        except Exception as e:
-            logger.error(f"Query plan validation error: {e}")
-            return []
 
         # Get filtered receipts from storage
         receipts = self.storage.get_filtered_receipts(query_plan, user_id)
@@ -107,19 +109,20 @@ class QueryService:
             # Apply item-level filtering
             filtered_receipts = self._filter_by_items(receipts, query_plan.get("filter", {}))
             logger.info(f"After item filtering: {len(filtered_receipts)} receipts")
+
         except Exception as e:
             logger.error(f"Item filtering error: {e}")
             return receipts
 
         # Apply limit
-        limit = query_plan.get("filter", {}).get("limit")
-        if limit and isinstance(limit, int) and limit > 0:
-            filtered_receipts = filtered_receipts[:limit]
-            logger.info(f"After limit {limit}: {len(filtered_receipts)} receipts")
+        receipts_limit = query_plan.get("filter", {}).get("limit")
+        if receipts_limit and isinstance(receipts_limit, int) and receipts_limit > 0:
+            filtered_receipts = filtered_receipts[:receipts_limit]
+            logger.info(f"After limit {receipts_limit}: {len(filtered_receipts)} receipts")
 
         return filtered_receipts
 
-    def _generate_llm_response(self, question: str, receipts: List[Dict[str, Any]]) -> Optional[str]:
+    def _generate_llm_response(self, user_query: str, receipts: List[Dict[str, Any]]) -> Optional[str]:
         """Generate response using LLM with filtered receipts data"""
 
         # Prepare receipt data for LLM
@@ -128,11 +131,12 @@ class QueryService:
             "receipts": receipts
         }
 
-        prompt = self.prompts.get_receipt_analysis_response_prompt(question, receipt_data)
+        prompt = self.prompts.get_receipt_analysis_response_prompt(user_query, receipt_data)
 
         try:
             response = self.llm.generate_text(prompt, max_tokens=2000)
             return response.content if response else None
+
         except Exception as e:
             logger.error(f"LLM response generation error: {e}")
             return None
