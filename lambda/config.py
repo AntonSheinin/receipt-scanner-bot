@@ -18,6 +18,7 @@ BEDROCK_REGION = os.environ.get('BEDROCK_REGION')
 USER_ID_SALT = os.environ.get('USER_ID_SALT', 'receipt-scanner-bot-default-salt-change-in-production')
 
 LLM_PROVIDER = os.environ.get('LLM_PROVIDER')
+DOCUMENT_STORAGE_PROVIDER = os.environ.get('DOCUMENT_STORAGE_PROVIDER')
 
 # OCR Configuration
 OCR_PROVIDER = os.environ.get('OCR_PROVIDER')
@@ -34,7 +35,11 @@ MAX_ITEM_NAME_LENGTH = 20
 MAX_RECEIPTS_PER_USER = 100
 
 # Database Configuration
-DATABASE_SECRET_ARN = os.environ.get('DATABASE_SECRET_ARN')
+DB_USER = os.environ.get('DB_USER')
+DB_PASSWORD = os.environ.get('DB_PASSWORD')
+DB_NAME = os.environ.get('DB_NAME')
+DB_PORT = os.environ.get('DB_PORT', 5432)
+DB_HOST = os.environ.get('DB_HOST')
 
 # AWS Clients (singleton pattern)
 _bedrock_client = None
@@ -45,20 +50,13 @@ SQS_QUEUE_URL = os.environ.get('SQS_QUEUE_URL')
 
 
 def get_database_connection_info():
-    """Get database connection info from AWS Secrets Manager"""
-    if not DATABASE_SECRET_ARN:
-        raise ValueError("DATABASE_SECRET_ARN not configured")
-
-    secrets_client = boto3.client('secretsmanager')
-    secret_response = secrets_client.get_secret_value(SecretId=DATABASE_SECRET_ARN)
-    secret = json.loads(secret_response['SecretString'])
-
+    """Get database connection info from environment variables"""
     return {
-        'host': secret['host'],
-        'port': secret['port'],
-        'database': secret['dbname'],
-        'user': secret['username'],
-        'password': secret['password']
+        'host': DB_HOST,
+        'port': DB_PORT,
+        'database': DB_NAME,
+        'user': DB_USER,
+        'password': DB_PASSWORD
     }
 
 

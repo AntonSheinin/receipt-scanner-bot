@@ -6,11 +6,16 @@ import os
 import json
 from typing import Any, Tuple
 
+import aws_cdk.aws_rds as rds
+import aws_cdk.aws_ec2 as ec2
+from constructs import Construct
 from aws_cdk.aws_lambda_python_alpha import PythonFunction
 from aws_cdk.aws_lambda import IFunction
 from aws_cdk import (
     Stack,
     Duration,
+    CfnOutput,
+    SecretValue,
     RemovalPolicy,
     CustomResource,
     aws_lambda as _lambda,
@@ -22,12 +27,8 @@ from aws_cdk import (
     aws_s3 as s3,
     aws_sqs as sqs,
     aws_cloudwatch as cloudwatch,
-    CfnOutput,
     custom_resources as cr
 )
-from constructs import Construct
-import aws_cdk.aws_rds as rds
-import aws_cdk.aws_ec2 as ec2
 
 
 class ReceiptScannerBotStack(Stack):
@@ -48,16 +49,20 @@ class ReceiptScannerBotStack(Stack):
         main_log_group = self._create_main_log_group()
 
         # Create database infrastructure
-        database, vpc, lambda_security_group = self._create_database_infrastructure()
+        database = self._create_database_infrastructure()
+        self._create_database_schema(database, main_log_group)
 
         # Create resources
         receipt_bucket = self._create_s3_bucket()
         processing_queue, dlq = self._create_processing_queue()
-        lambda_role = self._create_lambda_role(receipt_bucket, database, processing_queue)
-        producer_lambda = self._create_producer_lambda(lambda_role, bot_token, processing_queue, main_log_group, vpc, lambda_security_group, database)
-        consumer_lambda = self._create_consumer_lambda(lambda_role, processing_queue, receipt_bucket, main_log_group, vpc, lambda_security_group, database)
-        api_gateway = self._create_api_gateway(producer_lambda, main_log_group)
 
+        producer_role = self._create_producer_lambda_role(processing_queue)
+        consumer_role = self._create_consumer_lambda_role(receipt_bucket, database, processing_queue)
+
+        producer_lambda = self._create_producer_lambda(producer_role, bot_token, processing_queue, main_log_group)
+        consumer_lambda = self._create_consumer_lambda(consumer_role, processing_queue, receipt_bucket, main_log_group, database)
+
+        api_gateway = self._create_api_gateway(producer_lambda, main_log_group)
 
         # Setup webhook if bot token is valid
         if bot_token != "placeholder_token_for_bootstrap":
@@ -89,17 +94,32 @@ class ReceiptScannerBotStack(Stack):
             auto_delete_objects=True
         )
 
-    def _create_lambda_role(self, bucket: s3.Bucket, database: rds.DatabaseInstance, queue: sqs.Queue) -> iam.Role:
-        """Create IAM role for Lambda functions"""
+    def _create_producer_lambda_role(self, queue: sqs.Queue) -> iam.Role:
+        """Create IAM role for Producer Lambda"""
         role = iam.Role(
-            self, "ReceiptBotLambdaRole",
+            self, "ReceiptBotProducerLambdaRole",
             assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
             ]
         )
 
-        # Add permissions
+        # Only SQS permissions for producer
+        queue.grant_send_messages(role)
+
+        return role
+
+    def _create_consumer_lambda_role(self, bucket: s3.Bucket, database: rds.DatabaseInstance, queue: sqs.Queue) -> iam.Role:
+        """Create IAM role for Consumer Lambda"""
+        role = iam.Role(
+            self, "ReceiptBotConsumerLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"),
+            ]
+        )
+
+        # Consumer needs all permissions
         role.add_to_policy(
             iam.PolicyStatement(
                 actions=["bedrock:InvokeModel"],
@@ -117,23 +137,12 @@ class ReceiptScannerBotStack(Stack):
             )
         )
 
-        role.add_to_policy(
-            iam.PolicyStatement(
-                actions=["secretsmanager:GetSecretValue"],
-                resources=[database.secret.secret_arn]
-            )
-        )
-
         bucket.grant_read_write(role)
-        queue.grant_send_messages(role)
         queue.grant_consume_messages(role)
 
         return role
 
-    def _create_producer_lambda(self, role: iam.Role, bot_token: str,
-                           queue: sqs.Queue, log_group: logs.LogGroup,
-                           vpc: ec2.Vpc, security_group: ec2.SecurityGroup,
-                           database: rds.DatabaseInstance) -> _lambda.Function:
+    def _create_producer_lambda(self, role: iam.Role, bot_token: str, queue: sqs.Queue, log_group: logs.LogGroup,) -> _lambda.Function:
         """Create Producer Lambda (webhook handler - queues messages only)"""
 
         return PythonFunction(
@@ -145,23 +154,23 @@ class ReceiptScannerBotStack(Stack):
             role=role,
             timeout=Duration.seconds(30),  # Short timeout for fast webhook response
             memory_size=256,  # Minimal memory for webhook handling
-            vpc=vpc,
-            security_groups=[security_group],
             environment={
                 "TELEGRAM_BOT_TOKEN": bot_token,
-                "SQS_QUEUE_URL": queue.queue_url,
-                "DATABASE_SECRET_ARN": database.secret.secret_arn,
-                "DOCUMENT_STORAGE_PROVIDER": "postgresql"
+                "SQS_QUEUE_URL": queue.queue_url
             },
             log_group=log_group,
             logging_format=_lambda.LoggingFormat.TEXT,
             description="Producer Lambda - Handles Telegram webhooks and queues messages"
         )
 
-    def _create_consumer_lambda(self, role: iam.Role, queue: sqs.Queue,
-                           bucket: s3.Bucket, log_group: logs.LogGroup,
-                           vpc: ec2.Vpc, security_group: ec2.SecurityGroup,
-                           database: rds.DatabaseInstance) -> _lambda.Function:
+    def _create_consumer_lambda(
+        self,
+        role: iam.Role,
+        queue: sqs.Queue,
+        bucket: s3.Bucket,
+        log_group: logs.LogGroup,
+        database: rds.DatabaseInstance
+        ) -> _lambda.Function:
         """Create Consumer Lambda (processes SQS messages)"""
 
         consumer_lambda = PythonFunction(
@@ -173,13 +182,15 @@ class ReceiptScannerBotStack(Stack):
             role=role,
             timeout=Duration.minutes(10),  # Longer timeout for processing
             memory_size=1024,  # More memory for OCR/LLM processing
-            vpc=vpc,
-            security_groups=[security_group],
             environment={
+                "DB_USER": os.getenv('DB_USER'),
+                "DB_PASSWORD": os.getenv('DB_PASSWORD'),
+                "DB_NAME": os.getenv('DB_NAME'),
+                "DB_PORT": os.getenv('DB_PORT'),
+                "DB_HOST": database.instance_endpoint.hostname,
                 "TELEGRAM_BOT_TOKEN": os.getenv('TELEGRAM_BOT_TOKEN'),
                 "S3_BUCKET_NAME": bucket.bucket_name,
-                "DATABASE_SECRET_ARN": database.secret.secret_arn,
-                "DOCUMENT_STORAGE_PROVIDER": "postgresql",
+                "DOCUMENT_STORAGE_PROVIDER": os.getenv('DOCUMENT_STORAGE_PROVIDER'),
                 "BEDROCK_REGION": os.getenv('BEDROCK_REGION'),
                 "BEDROCK_MODEL_ID": os.getenv('BEDROCK_MODEL_ID'),
                 "OCR_PROVIDER": os.getenv('OCR_PROVIDER'),
@@ -216,7 +227,7 @@ class ReceiptScannerBotStack(Stack):
         dlq = sqs.Queue(
             self, "ProcessingDeadLetterQueue",
             queue_name="receipt-bot-processing-dlq",
-            retention_period=Duration.days(14),
+            retention_period=Duration.days(7),
             removal_policy=RemovalPolicy.DESTROY
         )
 
@@ -445,12 +456,6 @@ class ReceiptScannerBotStack(Stack):
         description="RDS PostgreSQL endpoint"
         )
 
-        CfnOutput(
-            self, "DatabaseSecretArn",
-            value=database.secret.secret_arn,
-            description="Database credentials secret ARN"
-        )
-
         if bot_token != "placeholder_token_for_bootstrap":
             CfnOutput(
                 self, "WebhookSetupStatus",
@@ -464,53 +469,26 @@ class ReceiptScannerBotStack(Stack):
                 description="Webhook setup status"
             )
 
-    def _create_database_infrastructure(self) -> tuple[rds.DatabaseInstance, ec2.Vpc, ec2.SecurityGroup]:
-        """Create RDS PostgreSQL instance and minimal VPC"""
+    def _create_database_infrastructure(self) -> rds.DatabaseInstance:
+        """Create publicly accessible RDS PostgreSQL instance with defaults"""
 
-        # Create VPC for RDS
-        vpc = ec2.Vpc(
-            self, "ReceiptBotVpc",
-            max_azs=2,
-            nat_gateways=0,  # No NAT needed - saves $45/month
-            subnet_configuration=[
-                ec2.SubnetConfiguration(
-                    name="Database",
-                    subnet_type=ec2.SubnetType.PRIVATE_ISOLATED,
-                    cidr_mask=24
-                )
-            ]
-        )
+        default_vpc = ec2.Vpc.from_lookup(self, "DefaultVpc", is_default=True)
 
-        # Security group for Lambda
-        lambda_security_group = ec2.SecurityGroup(
-            self, "ReceiptBotLambdaSecurityGroup",
-            vpc=vpc,
-            description="Security group for receipt bot lambdas"
-        )
-
-        # Security group for database
+        # Create security group that allows PostgreSQL access
         db_security_group = ec2.SecurityGroup(
             self, "ReceiptBotDbSecurityGroup",
-            vpc=vpc,
-            description="Security group for receipt bot database"
+            vpc=default_vpc,
+            description="Security group for publicly accessible database",
+            allow_all_outbound=False
         )
 
-        # Allow Lambda to connect to database
         db_security_group.add_ingress_rule(
-            peer=lambda_security_group,
-            connection=ec2.Port.tcp(5432)
+            peer=ec2.Peer.any_ipv4(),  # Allow from anywhere
+            connection=ec2.Port.tcp(5432),
+            description="PostgreSQL access from internet"
         )
 
-        # Create database subnet group - FIXED VERSION
-        db_subnet_group = rds.SubnetGroup(
-            self, "DbSubnetGroup",
-            description="Subnet group for database",
-            vpc=vpc,
-            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED)
-        )
-
-        # Create PostgreSQL instance
-        database = rds.DatabaseInstance(
+        return rds.DatabaseInstance(
             self, "ReceiptBotDatabase",
             engine=rds.DatabaseInstanceEngine.postgres(
                 version=rds.PostgresEngineVersion.VER_17
@@ -519,21 +497,22 @@ class ReceiptScannerBotStack(Stack):
                 ec2.InstanceClass.T4G,
                 ec2.InstanceSize.MICRO
             ),
-            vpc=vpc,
-            subnet_group=db_subnet_group,
+            vpc=default_vpc,
+            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
             security_groups=[db_security_group],
-            database_name="receipt_bot",
-            credentials=rds.Credentials.from_generated_secret("postgres"),
+            database_name=os.getenv('DB_NAME'),
+            credentials=rds.Credentials.from_username(
+                username=os.getenv('DB_USER'),
+                password=SecretValue.unsafe_plain_text(os.getenv('DB_PASSWORD'))
+            ),
             allocated_storage=20,
             backup_retention=Duration.days(7),
             deletion_protection=False,
-            removal_policy=RemovalPolicy.DESTROY
+            removal_policy=RemovalPolicy.DESTROY,
+            publicly_accessible=True
         )
 
-        return database, vpc, lambda_security_group
-
-    def _create_database_schema(self, database: rds.DatabaseInstance, vpc: ec2.Vpc,
-                            lambda_security_group: ec2.SecurityGroup) -> None:
+    def _create_database_schema(self, database: rds.DatabaseInstance, log_group: logs.LogGroup) -> None:
         """Create database schema using custom resource"""
 
         # Create Lambda function for schema initialization from file
@@ -543,16 +522,19 @@ class ReceiptScannerBotStack(Stack):
             runtime=_lambda.Runtime.PYTHON_3_12,
             index="database_schema_handler.py",
             handler="lambda_handler",
-            timeout=Duration.minutes(5),
-            vpc=vpc,
-            security_groups=[lambda_security_group],
+            timeout=Duration.minutes(2),
             environment={
-                "DATABASE_SECRET_ARN": database.secret.secret_arn
-            }
+                "DB_HOST": database.instance_endpoint.hostname,
+                "DB_PORT": os.getenv('DB_PORT'),
+                "DB_NAME": os.getenv('DB_NAME'),
+                "DB_USER": os.getenv('DB_USER'),
+                "DB_PASSWORD": os.getenv('DB_PASSWORD')
+            },
+            memory_size=256,
+            retry_attempts=0,
+            log_group=log_group,
+            logging_format=_lambda.LoggingFormat.TEXT,
         )
-
-        # Grant permissions to read the secret
-        database.secret.grant_read(schema_lambda)
 
         # Create custom resource provider
         schema_provider = cr.Provider(
@@ -565,7 +547,6 @@ class ReceiptScannerBotStack(Stack):
             self, "DatabaseSchemaResource",
             service_token=schema_provider.service_token,
             properties={
-                'SecretArn': database.secret.secret_arn,
                 'DatabaseEndpoint': database.instance_endpoint.hostname
             }
         )

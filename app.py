@@ -2,8 +2,9 @@
 # Unauthorized use is prohibited. See LICENSE file for details.
 
 """
-Receipt Scanner Bot MVP - CDK App Entry Point
+    Receipt Scanner Bot MVP - CDK App Entry Point
 """
+
 import os
 from dotenv import load_dotenv
 import aws_cdk as cdk
@@ -17,7 +18,7 @@ app = cdk.App()
 
 # Get environment configuration
 env = cdk.Environment(
-    account=app.node.try_get_context("account") or os.getenv("AWS_ACCOUNT_ID"),
+    account=os.getenv("AWS_ACCOUNT_ID") or app.node.try_get_context("account"),
     region=os.getenv("AWS_REGION", "eu-west-1")
 )
 

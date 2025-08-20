@@ -1,7 +1,8 @@
 """
-Database Schema Creation Lambda Handler
+    Database Schema Creation Lambda Handler
 """
 
+import os
 import json
 import psycopg2
 import boto3
@@ -36,22 +37,20 @@ def lambda_handler(event, context):
 def create_database_schema(event):
     """Create database tables and indexes"""
 
-    # Get database credentials from Secrets Manager
-    secret_arn = event['ResourceProperties']['SecretArn']
-
-    secrets_client = boto3.client('secretsmanager')
-    secret_response = secrets_client.get_secret_value(SecretId=secret_arn)
-    secret = json.loads(secret_response['SecretString'])
-
-    logger.info(f"Connecting to database: {secret['host']}:{secret['port']}")
+# Get database credentials from environment variables
+    db_host = os.getenv('DB_HOST')
+    db_port = int(os.getenv('DB_PORT'))
+    db_name = os.getenv('DB_NAME')
+    db_user = os.getenv('DB_USER')
+    db_password = os.getenv('DB_PASSWORD')
 
     # Connect to database
     conn = psycopg2.connect(
-        host=secret['host'],
-        port=secret['port'],
-        database=secret['dbname'],
-        user=secret['username'],
-        password=secret['password']
+        host=db_host,
+        port=db_port,
+        database=db_name,
+        user=db_user,
+        password=db_password
     )
 
     cursor = conn.cursor()
