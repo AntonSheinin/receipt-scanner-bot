@@ -65,5 +65,9 @@ class CategoryManager:
         """Get taxonomy as JSON string for LLM"""
         return json.dumps(self.taxonomy, indent=2)
 
+    def _get_category_hebrew_name(self, category_code: str) -> str | None:
+        """Get Hebrew name for category from taxonomy"""
+        return next(cat["hebrew_name"] for cat in self.taxonomy["categories"] if cat["code"] == category_code)
+
 # Global instance
 category_manager = CategoryManager()

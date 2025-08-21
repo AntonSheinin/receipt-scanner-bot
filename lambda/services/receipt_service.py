@@ -12,6 +12,7 @@ from utils.helpers import create_response
 from config import MAX_ITEMS_DISPLAY, MAX_ITEM_NAME_LENGTH, setup_logging, MAX_RECEIPTS_PER_USER
 from utils.helpers import get_secure_user_id
 from receipt_schemas import ReceiptAnalysisResult
+from utils.category_manager import category_manager
 
 
 setup_logging()
@@ -136,21 +137,8 @@ class ReceiptService:
                     # Show unit price
                     line += f" - ₪{actual_price:.2f}"
 
-                    # Add category if exists
-                    category_labels = {
-                            'food': 'מזון',
-                            'beverages': 'משקאות',
-                            'household': 'בית',
-                            'electronics': 'אלקטרוניקה',
-                            'clothing': 'ביגוד',
-                            'pharmacy': 'בית מרקחת',
-                            'deposit': 'פיקדון',
-                            'other': 'אחר'
-                        }
-
-                    if item.category:
-                        category_label = category_labels.get(item.category, item.category)
-                        line += f" [{category_label}]"
+                    # Add category
+                    line += f" [{category_manager.get_category_hebrew_name(item.category)}]"
 
                     response += line + "\n"
 
