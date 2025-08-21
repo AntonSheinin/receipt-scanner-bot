@@ -40,16 +40,16 @@ class OrchestratorService:
         chat_id = telegram_message['chat']['id']
         message_type = telegram_message['message_type']
 
-        logger.info(f"Orchestrating {message_type.value} message for chat_id: {chat_id}")
+        logger.info(f"Orchestrating {message_type} message for chat_id: {chat_id}")
 
         try:
-            if message_type == MessageType.PHOTO:
+            if message_type == MessageType.PHOTO.value:
                 return self._handle_photo_message(telegram_message, chat_id)
 
-            if message_type == MessageType.TEXT_QUERY:
+            if message_type == MessageType.TEXT_QUERY.value:
                 return self._handle_text_query(telegram_message, chat_id)
 
-            if message_type == MessageType.COMMAND:
+            if message_type == MessageType.COMMAND.value:
                 return self._handle_command_message(telegram_message, chat_id)
 
             logger.warning(f"Unknown message type for chat_id: {chat_id}")
