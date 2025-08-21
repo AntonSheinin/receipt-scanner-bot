@@ -67,6 +67,7 @@ class StorageService:
                 return parts[1] if len(parts) == 2 else None
             else:
                 return storage_url
+
         except Exception as e:
             logger.error(f"Storage key extraction error: {e}")
             return None
