@@ -39,7 +39,7 @@ class QueryService:
             # Step 1: Generate filter-only query plan
             query_plan = self._generate_filter_plan(question)
             if not query_plan:
-                self.telegram.send_message(chat_id, "❌ לא הצלחנו להבין את השאלתך. נסה לנסח מחדש.")
+                self.telegram.send_message(chat_id, "❌ לא הצלחנו להבין את שאלתך. נסה לנסח מחדש.")
                 logger.error(f"Failed to generate query plan for question: {question}")
                 return create_response(200, {"status": "failed"})
 
@@ -72,7 +72,7 @@ class QueryService:
 
         except Exception as e:
             logger.error(f"Query error: {e}", exc_info=True)
-            self.telegram.send_message(chat_id, "❌ הייתה בעיה בעיבוד השאלתך.")
+            self.telegram.send_message(chat_id, "❌ הייתה בעיה בעיבוד שאלתך.")
             return create_response(200, {"status": "error"})
 
     def _generate_filter_plan(self, user_query: str) -> Optional[Dict]:

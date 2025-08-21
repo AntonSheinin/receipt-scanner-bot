@@ -29,9 +29,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         try:
             # Parse the SQS message
             message_body = json.loads(record['body'])
+            attributes = record['messageAttributes']
             telegram_message = message_body['telegram_message']
             timestamp = message_body.get('timestamp')
             chat_id = telegram_message['chat']['id']
+            telegram_message['message_type'] = attributes['MessageType']['stringValue']
 
             logger.info(f"Processing message for chat_id: {chat_id} (queued at: {timestamp})")
 

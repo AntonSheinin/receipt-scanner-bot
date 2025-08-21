@@ -64,23 +64,21 @@ class OCRLLMProcessingStrategy(ReceiptProcessingStrategy):
             ocr_result = self.ocr.extract_raw_text(image_data) if self.ocr_processing_mode == OCRProcessingMode.RAW_TEXT.value else self.ocr.extract_receipt_data(image_data)
 
             if not ocr_result.success or not ocr_result.raw_text.strip():
-                logger.warning("OCR failed to extract text, falling back to LLM-only")
-                return LLMProcessingStrategy(self.llm).process(image_data)
+                logger.error("OCR failed to extract text")
+                return None
 
             structured_result = self.llm.structure_ocr_text(ocr_result.raw_text)
 
-            if structured_result:
-                if structured_result.processing_metadata:
-                    structured_result.processing_metadata['ocr_confidence'] = ocr_result.confidence
+            if not structured_result:
+                logger.error("LLM structuring failed")
+                return None
 
-                return structured_result
-
-            logger.warning("LLM structuring failed, falling back to LLM-only")
-            return LLMProcessingStrategy(self.llm).process(image_data)
+            return structured_result
 
         except Exception as e:
             logger.error(f"OCR+LLM processing error: {e}")
-            return LLMProcessingStrategy(self.llm).process(image_data)
+            return None
+
 
 class PPOCRLLMProcessingStrategy(ReceiptProcessingStrategy):
     def __init__(self, image_preprocessor, ocr, llm: LLMService, ocr_processing_mode):

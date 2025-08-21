@@ -31,19 +31,6 @@ class ReceiptService:
         self.telegram.send_typing(chat_id)
         secure_user_id = get_secure_user_id(chat_id)
 
-        # Check receipt limit BEFORE any processing
-        logger.info(f"Checking receipt limit for user: {chat_id}")
-        current_count = self.storage.count_user_receipts(secure_user_id)
-
-        if current_count >= MAX_RECEIPTS_PER_USER:
-            logger.warning(f"User {chat_id} hit receipt limit: {current_count}/{MAX_RECEIPTS_PER_USER}")
-            return self.telegram.send_error(
-                chat_id,
-                f"🚫 הגעת למגבלת הקבלות ({MAX_RECEIPTS_PER_USER} קבלות).\n\n"
-                f"📊 יש לך כרגע {current_count} קבלות שמורות.\n"
-                f"🗑️ השתמש בפקודה /delete_last או /delete_all כדי למחוק קבלות ישנות."
-            )
-
         # Download photo
         logger.info("Downloading receipt photo")
         photo_data = self.telegram.download_photo(message['photo'])
@@ -67,7 +54,7 @@ class ReceiptService:
         if not analysis_result:
             return self.telegram.send_error(
                 chat_id,
-                "❌ לא הצלחנו לעבד את הקבלה.\n\n"
+                "❌ לא הצלחתי לעבד את הקבלה.\n\n"
                 "יתכן שהתמונה לא ברורה מספיק או שהנתונים לא תקינים.\n"
                 "נא לצלם שוב את הקבלה בתאורה טובה ולנסות שוב."
             )

@@ -62,7 +62,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Optional[Dict[str, An
     try:
         # Send immediate acknowledgment to user
         telegram_service.send_typing(chat_id)
-        telegram_service.send_message(chat_id, "📨 קיבלנו את ההודעה! מעבדים...")
+        telegram_service.send_message(chat_id, "📨 קיבלתי את ההודעה! מעבד...")
 
         # Queue the entire Telegram message for processing
         success = queue_service.queue_telegram_message(message)

@@ -38,7 +38,7 @@ class OrchestratorService:
         """Main orchestration method - routes message to appropriate service"""
 
         chat_id = telegram_message['chat']['id']
-        message_type = self._determine_message_type(telegram_message)
+        message_type = telegram_message['message_type']
 
         logger.info(f"Orchestrating {message_type.value} message for chat_id: {chat_id}")
 
@@ -46,44 +46,23 @@ class OrchestratorService:
             if message_type == MessageType.PHOTO:
                 return self._handle_photo_message(telegram_message, chat_id)
 
-            elif message_type == MessageType.TEXT_QUERY:
+            if message_type == MessageType.TEXT_QUERY:
                 return self._handle_text_query(telegram_message, chat_id)
 
-            elif message_type == MessageType.COMMAND:
+            if message_type == MessageType.COMMAND:
                 return self._handle_command_message(telegram_message, chat_id)
 
-            else:
-                logger.warning(f"Unknown message type for chat_id: {chat_id}")
-                self.telegram_service.send_message(
-                    chat_id,
-                    "❓ לא הבנתי את סוג ההודעה. אנא שלח תמונה של קבלה או שאל שאלה."
-                )
-                return {"status": "unknown_message_type"}
+            logger.warning(f"Unknown message type for chat_id: {chat_id}")
+            self.telegram_service.send_message(
+                chat_id,
+                "❓ לא הבנתי את סוג ההודעה. אנא שלח תמונה של קבלה או שאל שאלה."
+            )
+            return {"status": "unknown_message_type"}
 
         except Exception as e:
             logger.error(f"Orchestration error for chat_id {chat_id}: {e}", exc_info=True)
-            self.telegram_service.send_message(
-                chat_id,
-                "❌ הייתה בעיה בעיבוד ההודעה שלך. אנא נסה שוב."
-            )
+            self.telegram_service.send_message(chat_id, "❌ הייתה בעיה בעיבוד ההודעה שלך. אנא נסה שוב.")
             return {"status": "error", "error": str(e)}
-
-    def _determine_message_type(self, telegram_message: Dict[str, Any]) -> MessageType:
-        """Determine the type of Telegram message"""
-
-        if 'photo' in telegram_message:
-            return MessageType.PHOTO
-
-        elif 'text' in telegram_message:
-            text = telegram_message.get('text', '').strip()
-
-            if text.startswith('/'):
-                return MessageType.COMMAND
-
-            elif text:
-                return MessageType.TEXT_QUERY
-
-        return MessageType.UNKNOWN
 
     def _handle_photo_message(self, telegram_message: Dict[str, Any], chat_id: int) -> Dict[str, Any]:
         """Handle receipt photo processing"""
@@ -107,7 +86,7 @@ class OrchestratorService:
             return {"status": "receipt_limit_exceeded"}
 
         # Send processing message
-        self.telegram_service.send_message(chat_id, "📸 מעבדים את הקבלה...")
+        self.telegram_service.send_message(chat_id, "📸 מעבד את הקבלה...")
 
         # Process receipt using receipt service
         result = self.receipt_service.process_receipt(telegram_message, chat_id)
@@ -181,7 +160,7 @@ class OrchestratorService:
         """Handle /delete_all command"""
 
         self.telegram_service.send_typing(chat_id)
-        self.telegram_service.send_message(chat_id, "🗑️ מוחקים את כל הקבלות... נא להמתין.")
+        self.telegram_service.send_message(chat_id, "🗑️ מוחק את כל הקבלות... נא להמתין.")
 
         secure_user_id = get_secure_user_id(chat_id)
         deleted_count = self.storage_service.delete_all_receipts(secure_user_id)

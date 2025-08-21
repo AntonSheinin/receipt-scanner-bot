@@ -1,5 +1,5 @@
 """
-    Image Preprocessor moduleusing only PIL
+    PIL Image Preprocessor module
 """
 
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
@@ -36,7 +36,6 @@ class EnhancementConfig:
 class ImagePreprocessorPillow:
     """
     Lightweight preprocessor using only PIL.
-    Smaller footprint but fewer advanced features than OpenCV version.
     """
 
     def __init__(self, config: Optional[EnhancementConfig] = None):

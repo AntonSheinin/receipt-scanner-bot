@@ -31,7 +31,6 @@ class TelegramService:
             if len(text) > MAX_MESSAGE_LENGTH:
                 text = text[:MAX_MESSAGE_LENGTH-100] + "\n\n... _(Message truncated due to length limit)_"
 
-            # Clean text for Telegram markdown if needed
             if parse_mode == "Markdown":
                 text = self._clean_markdown(text)
 
@@ -44,6 +43,7 @@ class TelegramService:
                 try:
                     self.bot.send_message(chat_id, text, parse_mode=None)
                     return True
+
                 except Exception as fallback_error:
                     logger.error(f"Fallback message failed: {fallback_error}")
                     self._send_fallback_message(chat_id)
@@ -52,6 +52,7 @@ class TelegramService:
                 logger.error(f"Telegram API error: {e}")
                 self._send_fallback_message(chat_id)
                 return False
+
         except Exception as e:
             logger.error(f"Unexpected send message error: {e}")
             self._send_fallback_message(chat_id)
@@ -62,6 +63,7 @@ class TelegramService:
         try:
             self.bot.send_chat_action(chat_id, 'typing')
             return True
+
         except Exception as e:
             logger.warning(f"Send typing error: {e}")
             return False
@@ -117,6 +119,7 @@ class TelegramService:
 
                 logger.info("✅ Webhook set and verified successfully")
                 return {'success': True, 'message': 'Webhook set and verified'}
+
             else:
                 raise Exception("Webhook setup returned False")
 
@@ -133,6 +136,7 @@ class TelegramService:
             if result:
                 logger.info("✅ Webhook deleted successfully")
                 return {'success': True, 'message': 'Webhook deleted successfully'}
+
             else:
                 raise Exception("Webhook deletion returned False")
 
@@ -153,6 +157,7 @@ class TelegramService:
                 'max_connections': webhook_info.max_connections,
                 'allowed_updates': webhook_info.allowed_updates
             }
+
         except Exception as e:
             logger.error(f"Error getting webhook info: {e}")
             return {}
@@ -180,7 +185,6 @@ class TelegramService:
             logger.error(f"FAILED to set bot commands: {e}")
             raise Exception(f"Command setup failed: {str(e)}")
 
-    # Helper Methods
     def _clean_markdown(self, text: str) -> str:
         """Clean text for Telegram markdown"""
         # Escape problematic characters but preserve intentional formatting
@@ -196,5 +200,6 @@ class TelegramService:
         try:
             fallback_text = "✅ Request processed successfully, but response formatting failed."
             self.bot.send_message(chat_id, fallback_text, parse_mode=None)
+
         except Exception as e:
             logger.error(f"Even fallback message failed: {e}")

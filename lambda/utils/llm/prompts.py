@@ -187,7 +187,7 @@ Extract the following information in valid JSON format ONLY:
 
 {{
     "store_name": "name of the store/business",
-    "date": "date in DD/MM/YYYY format",
+    "purchasing_date": "date in DD/MM/YYYY format",
     "receipt_number": "receipt/transaction number if available",
     "payment_method": "cash|credit_card|other",
     "items": [

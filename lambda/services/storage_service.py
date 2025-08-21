@@ -1,5 +1,5 @@
 """
-    Storage Service module - Clean DDD Business Logic Layer
+    Storage Service module
 """
 
 import logging
@@ -17,13 +17,10 @@ class StorageService:
     """Business logic layer for storage operations"""
 
     def __init__(self):
-        # Use factory to create storage providers
         self.image_storage = ProviderFactory.create_image_storage('s3')
         self.document_storage = ProviderFactory.create_document_storage('postgresql')
 
-    # ======================
-    # Image Storage Methods
-    # ======================
+    # --------------------Image Storage Methods--------------------------
 
     def store_raw_image(self, receipt_id: str, image_data: bytes) -> Optional[str]:
         """Store receipt image using ImageStorage provider"""
@@ -72,9 +69,7 @@ class StorageService:
             logger.error(f"Storage key extraction error: {e}")
             return None
 
-    # ======================
-    # Receipt Storage Methods (Business Logic Layer)
-    # ======================
+    # ------------------Receipt Storage Methods--------------------------------------
 
     def store_receipt_data(self, receipt_id: str, user_id: str, receipt_data: ReceiptData,
                           image_url: str, metadata: Optional[Dict] = None) -> bool:
@@ -87,12 +82,9 @@ class StorageService:
             'image_url': image_url
         })
 
-        # Add metadata if provided (business logic)
-        if metadata:
-            receipt_dict['metadata'] = metadata
-
         try:
             return self.document_storage.save_receipt_with_items(user_id, receipt_dict)
+
         except Exception as e:
             logger.error(f"Receipt storage error: {e}")
             return False
@@ -108,7 +100,6 @@ class StorageService:
             receipts = self.document_storage.get_filtered_receipts(user_id, provider_filters)
 
             logger.info(f"Found {len(receipts)} receipts for user {user_id[:8]}...")
-
             return receipts
 
         except Exception as e:
@@ -119,14 +110,13 @@ class StorageService:
         """Delete most recent receipt using SQL efficiently"""
 
         try:
-            # Get image_url and delete receipt in one operation
             image_url = self.document_storage.delete_last_uploaded_receipt(user_id)
 
             if image_url:
-                # Business logic: Clean up associated image
                 self.delete_receipt_image(image_url)
                 logger.info(f"Deleted last receipt and image for user: {user_id}")
                 return True
+
             else:
                 logger.info(f"No receipts found to delete for user: {user_id}")
                 return False
@@ -139,14 +129,13 @@ class StorageService:
         """Delete all receipts using SQL efficiently"""
 
         try:
-            # Get image URLs and delete all receipts in one operation
             image_urls = self.document_storage.delete_all_receipts(user_id)
 
-            # Business logic: Clean up images
             for image_url in image_urls:
                 self.delete_receipt_image(image_url)
 
             deleted_count = len(image_urls)
+
             logger.info(f"Deleted {deleted_count} receipts for user: {user_id}")
             return deleted_count
 
@@ -160,7 +149,6 @@ class StorageService:
         try:
             count = self.document_storage.count_user_receipts(user_id)
 
-            # Business logic: Log metrics for monitoring
             logger.info(f"User {user_id} has {count} receipts")
 
             return count
@@ -169,33 +157,22 @@ class StorageService:
             logger.error(f"Count receipts error: {e}")
             return 0
 
-    # ======================
-    # Private Helper Methods (Business Logic)
-    # ======================
-
     def _prepare_filters_for_provider(self, domain_filters: Dict) -> Dict:
         """Transform domain filters to provider format"""
 
+        possible_filters = ['date_range', 'store_names', 'categories', 'subcategories', 'item_keywords', 'payment_methods', 'price_range', 'limit']
         provider_filters = {}
 
-        # Direct mapping filters
-        for key in ['date_range', 'store_names', 'categories', 'subcategories',
-                    'item_keywords', 'payment_methods', 'price_range', 'limit']:
+        for key in possible_filters:
             if key in domain_filters:
                 provider_filters[key] = domain_filters[key]
 
-        # Business logic: Transform store_names for case-insensitive search
         if 'store_names' in provider_filters:
-            # Normalize store names (business rule)
-            provider_filters['store_names'] = [
-                store.strip() for store in provider_filters['store_names']
-            ]
+            provider_filters['store_names'] = [store.strip() for store in provider_filters['store_names']]
 
-        # Business logic: Validate date range
         if 'date_range' in provider_filters:
             date_range = provider_filters['date_range']
             if date_range.get('start') and date_range.get('end'):
-                # Business rule: Ensure start <= end
                 if date_range['start'] > date_range['end']:
                     logger.warning("Invalid date range: start > end, swapping")
                     provider_filters['date_range'] = {

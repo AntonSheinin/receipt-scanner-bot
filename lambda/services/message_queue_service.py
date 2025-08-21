@@ -7,6 +7,7 @@ import logging
 from typing import Dict, Any
 from datetime import datetime, timezone
 from config import get_sqs_client, SQS_QUEUE_URL, setup_logging
+from services.orchestrator_service import MessageType
 
 
 setup_logging()
@@ -26,7 +27,6 @@ class MessageQueueService:
                 logger.error("SQS_QUEUE_URL not configured")
                 return False
 
-            # Create queue payload with raw Telegram message
             queue_payload = {
                 "telegram_message": telegram_message,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -42,7 +42,7 @@ class MessageQueueService:
                         'DataType': 'String'
                     },
                     'MessageType': {
-                        'StringValue': self._detect_message_type(telegram_message),
+                        'StringValue': self._detect_message_type(telegram_message).value,
                         'DataType': 'String'
                     }
                 }
@@ -55,15 +55,14 @@ class MessageQueueService:
             logger.error(f"Failed to queue Telegram message: {e}")
             return False
 
-    def _detect_message_type(self, telegram_message: Dict[str, Any]) -> str:
+    def _detect_message_type(self, telegram_message: Dict[str, Any]) -> MessageType:
         """Detect message type for SQS attributes"""
+
         if 'photo' in telegram_message:
-            return 'photo'
-        elif 'text' in telegram_message:
+            return MessageType.PHOTO
+
+        if 'text' in telegram_message:
             text = telegram_message.get('text', '').strip().lower()
-            if text.startswith('/'):
-                return 'command'
-            else:
-                return 'text_query'
-        else:
-            return 'unknown'
+            return MessageType.COMMAND if text.startswith('/') else MessageType.TEXT_QUERY
+
+        return MessageType.UNKNOWN

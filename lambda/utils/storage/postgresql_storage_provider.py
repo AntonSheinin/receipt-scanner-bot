@@ -57,7 +57,7 @@ class PostgreSQLStorageProvider(DocumentStorage):
                 with conn.cursor() as cursor:
                     # Insert receipt
                     cursor.execute("""
-                        INSERT INTO receipts (id, user_id, store_name, date, total, payment_method, receipt_number, image_url)
+                        INSERT INTO receipts (id, user_id, store_name, purchasing_date, total, payment_method, receipt_number, image_url)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (id) DO UPDATE SET
                             store_name = EXCLUDED.store_name,
@@ -68,7 +68,7 @@ class PostgreSQLStorageProvider(DocumentStorage):
                             image_url = EXCLUDED.image_url
                     """, (
                         receipt_id, user_id, receipt_data.get('store_name'),
-                        receipt_data.get('date'), receipt_data.get('total'),
+                        receipt_data.get('purchasing_date'), receipt_data.get('total'),
                         receipt_data.get('payment_method'), receipt_data.get('receipt_number'),
                         receipt_data.get('image_url')
                     ))
