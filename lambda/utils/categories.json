@@ -3,77 +3,90 @@
     {
       "name": "Food",
       "code": "food",
+      "hebrew_name": "מזון",
       "description": "All types of food products sold in stores",
       "subcategories": [
         {
           "name": "Meat & Poultry",
           "code": "meat_poultry",
+          "hebrew_name": "בשר ועוף",
           "description": "Fresh raw meat and poultry products",
           "sample_keywords": ["beef", "chicken", "turkey", "veal", "poultry"]
         },
         {
           "name": "Frozen Meat & Poultry",
           "code": "frozen_meat_poultry",
+          "hebrew_name": "בשר ועוף קפוא",
           "description": "Frozen meat and poultry products",
           "sample_keywords": ["frozen chicken", "frozen beef", "frozen turkey", "frozen meat"]
         },
         {
           "name": "Processed Meats & Sausages",
           "code": "processed_meats_sausages",
+          "hebrew_name": "בשרים מעובדים ונקניקים",
           "description": "Sausages, pastrami, salami, and other processed meats",
           "sample_keywords": ["pastrami", "salami", "hot dog", "sausage", "bologna"]
         },
         {
           "name": "Fish & Seafood",
           "code": "fish_seafood",
+          "hebrew_name": "דגים ופירות ים",
           "description": "Fresh or frozen fish and seafood products",
           "sample_keywords": ["salmon", "tuna", "shrimp", "sardine", "fish"]
         },
         {
           "name": "Dairy & Eggs",
           "code": "dairy_eggs",
+          "hebrew_name": "מוצרי חלב וביצים",
           "description": "Milk, cheese, yogurt, eggs and related products",
           "sample_keywords": ["milk", "cheese", "yogurt", "eggs", "cream"]
         },
         {
           "name": "Bread & Bakery",
           "code": "bread_bakery",
+          "hebrew_name": "לחם ואפייה",
           "description": "Bread, rolls, pastries and bakery items",
           "sample_keywords": ["bread", "bagel", "roll", "croissant", "bun"]
         },
         {
           "name": "Fruits & Vegetables",
           "code": "fruits_vegetables",
+          "hebrew_name": "פירות וירקות",
           "description": "Fresh fruits and vegetables, seasonal or packaged",
           "sample_keywords": ["apple", "banana", "tomato", "carrot", "lettuce"]
         },
         {
           "name": "Frozen Food",
           "code": "frozen_food",
+          "hebrew_name": "מזון קפוא",
           "description": "Frozen vegetables, ready meals, desserts and ice cream",
           "sample_keywords": ["frozen vegetables", "ice cream", "frozen pizza", "dumplings", "fish sticks"]
         },
         {
           "name": "Dry Goods & Cooking Essentials",
           "code": "dry_goods",
+          "hebrew_name": "מוצרי מזון בסיסיים",
           "description": "Rice, pasta, flour, sugar, oils, canned and jarred goods",
           "sample_keywords": ["rice", "pasta", "flour", "sugar", "canned beans"]
         },
         {
           "name": "Snacks & Confectionery",
           "code": "snacks_confectionery",
+          "hebrew_name": "חטיפים וממתקים",
           "description": "Chips, chocolates, candy, biscuits and other snacks",
           "sample_keywords": ["chocolate", "candy", "chips", "biscuits", "cookies"]
         },
         {
           "name": "Ready Meals & Deli",
           "code": "ready_meals_deli",
+          "hebrew_name": "ארוחות מוכנות ודליקטסים",
           "description": "Prepared meals, salads, sandwiches and deli meats",
           "sample_keywords": ["sandwich", "salad", "prepared meal", "deli meat", "rotisserie chicken"]
         },
         {
           "name": "Baby Food",
           "code": "baby_food",
+          "hebrew_name": "מזון תינוקות",
           "description": "Food specifically for babies and infants",
           "sample_keywords": ["baby formula", "baby cereal", "puree", "baby snacks"]
         }
@@ -82,47 +95,55 @@
     {
       "name": "Beverages",
       "code": "beverages",
+      "hebrew_name": "משקאות",
       "description": "All types of drinks, including alcoholic and non-alcoholic",
       "subcategories": [
         {
           "name": "Water",
           "code": "water",
+          "hebrew_name": "מים",
           "description": "Mineral, spring, still or bottled water",
           "sample_keywords": ["mineral water", "spring water", "still water", "bottled water"]
         },
         {
           "name": "Soft Drinks",
           "code": "soft_drinks",
+          "hebrew_name": "משקאות קלים",
           "description": "Non-alcoholic carbonated and non-carbonated beverages",
           "sample_keywords": ["cola", "soda", "lemonade", "juice", "fizzy drink"]
         },
         {
           "name": "Coffee & Tea",
           "code": "coffee_tea",
+          "hebrew_name": "קפה ותה",
           "description": "Coffee beans, ground coffee, instant coffee, tea bags and herbal teas",
           "sample_keywords": ["coffee beans", "ground coffee", "instant coffee", "tea bags", "herbal tea"]
         },
         {
           "name": "Hot Chocolate & Cocoa Drinks",
-          "code": "cocoa_drinks",
+          "code": "chocolate_drinks",
+          "hebrew_name": "שוקו ומשקאות קקאו",
           "description": "Hot chocolate and cocoa-based drinks",
           "sample_keywords": ["hot chocolate", "cocoa powder", "cocoa drink", "chocolate drink"]
         },
         {
           "name": "Alcoholic Beverages",
           "code": "alcohol",
+          "hebrew_name": "משקאות אלכוהוליים",
           "description": "Beer, wine, spirits and other alcoholic drinks",
           "sample_keywords": ["beer", "wine", "vodka", "whiskey", "rum"]
         },
         {
           "name": "Dairy Drinks",
           "code": "dairy_drinks",
+          "hebrew_name": "משקאות חלב",
           "description": "Milk-based drinks and yogurt beverages",
           "sample_keywords": ["chocolate milk", "yogurt drink", "milkshake", "lassi"]
         },
         {
           "name": "Energy & Sports Drinks",
           "code": "energy_sports",
+          "hebrew_name": "משקאות אנרגיה וספורט",
           "description": "Energy drinks and isotonic sports beverages",
           "sample_keywords": ["energy drink", "sports drink", "isotonic beverage", "powerade"]
         }
@@ -131,23 +152,27 @@
     {
       "name": "Pets",
       "code": "pets",
+      "hebrew_name": "חיות מחמד",
       "description": "Pet food, accessories, and veterinary services",
       "subcategories": [
         {
           "name": "Pet Food",
           "code": "pet_food",
+          "hebrew_name": "מזון לחיות מחמד",
           "description": "Food for pets like dogs, cats, and other animals",
           "sample_keywords": ["dog food", "cat food", "pet treats", "kibble"]
         },
         {
           "name": "Pet Accessories",
           "code": "pet_accessories",
+          "hebrew_name": "אביזרי חיות מחמד",
           "description": "Toys, collars, leashes, cages and litter products",
           "sample_keywords": ["toy", "leash", "cage", "collar", "litter"]
         },
         {
           "name": "Veterinary Services",
           "code": "veterinary_services",
+          "hebrew_name": "שירותי וטרינריה",
           "description": "Vet visits, vaccinations, and medical care for pets",
           "sample_keywords": ["vet visit", "vaccination", "pet surgery", "checkup", "pet medicine"]
         }
@@ -156,29 +181,34 @@
     {
       "name": "Household",
       "code": "household",
+      "hebrew_name": "מוצרי בית",
       "description": "Household cleaning, paper, kitchen and maintenance products",
       "subcategories": [
         {
           "name": "Cleaning Supplies",
           "code": "cleaning_supplies",
+          "hebrew_name": "חומרי ניקוי",
           "description": "Detergents, soaps, disinfectants and other cleaning products",
           "sample_keywords": ["detergent", "dish soap", "floor cleaner", "bleach", "disinfectant"]
         },
         {
           "name": "Paper & Disposable Products",
           "code": "paper_disposable",
+          "hebrew_name": "מוצרי נייר וחד פעמי",
           "description": "Toilet paper, paper towels, napkins and disposable kitchenware",
           "sample_keywords": ["toilet paper", "paper towels", "napkins", "disposable cups", "plates"]
         },
         {
           "name": "Kitchenware & Storage",
           "code": "kitchenware_storage",
+          "hebrew_name": "כלי מטבח ואחסון",
           "description": "Plastic wrap, foil, containers and food storage items",
           "sample_keywords": ["plastic wrap", "aluminum foil", "food container", "storage bag"]
         },
         {
           "name": "Home Maintenance",
           "code": "home_maintenance",
+          "hebrew_name": "תחזוקת בית",
           "description": "Batteries, light bulbs, basic tools and repair supplies",
           "sample_keywords": ["light bulb", "battery", "screwdriver", "nails", "glue"]
         }
@@ -187,29 +217,34 @@
     {
       "name": "Personal Care",
       "code": "personal_care",
+      "hebrew_name": "טיפוח אישי",
       "description": "Hygiene, cosmetics, baby care and health products",
       "subcategories": [
         {
           "name": "Hygiene",
           "code": "hygiene",
+          "hebrew_name": "היגיינה",
           "description": "Soap, shampoo, toothpaste, deodorant, razors",
           "sample_keywords": ["soap", "shampoo", "toothpaste", "deodorant", "razor"]
         },
         {
           "name": "Cosmetics & Beauty",
           "code": "cosmetics_beauty",
+          "hebrew_name": "קוסמטיקה ויופי",
           "description": "Cosmetic and beauty products like lipstick, foundation, creams",
           "sample_keywords": ["lipstick", "foundation", "perfume", "cream", "mascara"]
         },
         {
           "name": "Baby Care",
           "code": "baby_care",
+          "hebrew_name": "טיפוח תינוקות",
           "description": "Diapers, wipes, baby lotions and baby shampoos",
           "sample_keywords": ["diapers", "baby wipes", "baby lotion", "baby shampoo"]
         },
         {
           "name": "Health & Wellness",
           "code": "health_wellness",
+          "hebrew_name": "בריאות ורווחה",
           "description": "Vitamins and wellness supplements (non-drug)",
           "sample_keywords": ["vitamins", "supplements", "omega 3"]
         }
@@ -218,41 +253,48 @@
     {
       "name": "Electronics",
       "code": "electronics",
+      "hebrew_name": "אלקטרוניקה",
       "description": "Computers, phones, home electronics, printers, and small appliances",
       "subcategories": [
         {
           "name": "Computers & Tablets",
           "code": "computers_tablets",
+          "hebrew_name": "מחשבים וטאבלטים",
           "description": "Laptops, desktops, tablets and related devices",
           "sample_keywords": ["laptop", "tablet", "desktop", "iPad"]
         },
         {
           "name": "Mobile Phones",
           "code": "mobile_phones",
+          "hebrew_name": "טלפונים ניידים",
           "description": "Smartphones and cell phones",
           "sample_keywords": ["smartphone", "iPhone", "Android", "cell phone"]
         },
         {
           "name": "Accessories",
           "code": "electronics_accessories",
+          "hebrew_name": "אביזרי אלקטרוניקה",
           "description": "Chargers, cables, headphones, cases and power banks",
           "sample_keywords": ["charger", "USB cable", "headphones", "phone case", "power bank"]
         },
         {
           "name": "Printers & Office Equipment",
           "code": "printers_office",
+          "hebrew_name": "מדפסות וציוד משרדי",
           "description": "Printers, scanners, ink cartridges and related equipment",
           "sample_keywords": ["printer", "scanner", "ink cartridge", "paper tray"]
         },
         {
           "name": "Home Electronics",
           "code": "home_electronics",
+          "hebrew_name": "אלקטרוניקה ביתית",
           "description": "TVs, cameras, smart home devices and audio systems",
           "sample_keywords": ["TV", "camera", "speaker", "smart home device", "audio system"]
         },
         {
           "name": "Small Appliances",
           "code": "small_appliances",
+          "hebrew_name": "מוצרי חשמל קטנים",
           "description": "Kitchen and personal small appliances like kettle, toaster, blender",
           "sample_keywords": ["toaster", "kettle", "blender", "mixer", "hairdryer"]
         }
@@ -261,41 +303,48 @@
     {
       "name": "Clothing & Footwear",
       "code": "clothing_footwear",
+      "hebrew_name": "ביגוד והנעלה",
       "description": "Clothing, footwear and accessories for men, women and children",
       "subcategories": [
         {
           "name": "Men’s Clothing",
           "code": "mens_clothing",
+          "hebrew_name": "ביגוד גברים",
           "description": "Clothing items for men",
           "sample_keywords": ["shirt", "pants", "jacket", "sweater", "t-shirt"]
         },
         {
           "name": "Women’s Clothing",
           "code": "womens_clothing",
+          "hebrew_name": "ביגוד נשים",
           "description": "Clothing items for women",
           "sample_keywords": ["dress", "blouse", "skirt", "jacket", "cardigan"]
         },
         {
           "name": "Children’s Clothing",
           "code": "childrens_clothing",
+          "hebrew_name": "ביגוד ילדים",
           "description": "Clothing items for children",
           "sample_keywords": ["baby onesie", "kids t-shirt", "pants", "jacket"]
         },
         {
           "name": "Footwear",
           "code": "footwear",
+          "hebrew_name": "הנעלה",
           "description": "Shoes, boots, sandals and sneakers",
           "sample_keywords": ["sneakers", "boots", "sandals", "heels", "loafers"]
         },
         {
           "name": "Accessories",
           "code": "clothing_accessories",
+          "hebrew_name": "אביזרי ביגוד",
           "description": "Hats, belts, scarves, bags, gloves, ties",
           "sample_keywords": ["hat", "belt", "scarf", "bag", "gloves"]
         },
         {
           "name": "Underwear & Socks",
           "code": "underwear_socks",
+          "hebrew_name": "תחתונים וגרביים",
           "description": "Underwear, bras, boxers, panties and socks",
           "sample_keywords": ["underwear", "boxers", "bra", "socks", "panties"]
         }
@@ -304,23 +353,27 @@
     {
       "name": "Car & Transportation",
       "code": "car_transportation",
+      "hebrew_name": "רכב ותחבורה",
       "description": "Fuel, car services and car accessories",
       "subcategories": [
         {
           "name": "Fuel & Electric",
           "code": "fuel_electric",
+          "hebrew_name": "דלק וטעינה חשמלית",
           "description": "Gasoline, diesel, and electric charging",
           "sample_keywords": ["gasoline", "diesel", "EV charging", "electric charge", "petrol", "octan"]
         },
         {
           "name": "Car Services",
           "code": "car_services",
+          "hebrew_name": "שירותי רכב",
           "description": "Repairs, car wash, inspection, maintenance",
           "sample_keywords": ["car wash", "repair", "inspection", "parking", "maintenance"]
         },
         {
           "name": "Car Accessories",
           "code": "car_accessories",
+          "hebrew_name": "אביזרי רכב",
           "description": "Floor mats, wipers, seat covers, phone holders",
           "sample_keywords": ["wiper", "floor mat", "seat cover", "phone holder", "air freshener"]
         }
@@ -329,29 +382,34 @@
     {
       "name": "Home & Furniture",
       "code": "home_furniture",
+      "hebrew_name": "בית וריהוט",
       "description": "Furniture, home textiles, decor, garden and outdoor products",
       "subcategories": [
         {
           "name": "Furniture",
           "code": "furniture",
+          "hebrew_name": "רהיטים",
           "description": "Tables, chairs, beds, cabinets and sofas",
           "sample_keywords": ["sofa", "chair", "table", "bed", "cabinet"]
         },
         {
           "name": "Home Textiles",
           "code": "home_textiles",
+          "hebrew_name": "טקסטיל לבית",
           "description": "Bedsheets, towels, curtains, blankets and pillows",
           "sample_keywords": ["bedsheet", "towel", "curtain", "blanket", "pillow"]
         },
         {
           "name": "Decor",
           "code": "decor",
+          "hebrew_name": "דקור",
           "description": "Lamps, carpets, vases, picture frames and mirrors",
           "sample_keywords": ["lamp", "carpet", "vase", "picture frame", "mirror"]
         },
         {
           "name": "Garden & Outdoor",
           "code": "garden_outdoor",
+          "hebrew_name": "גינה וחוץ",
           "description": "Garden furniture, tools and outdoor accessories",
           "sample_keywords": ["garden chair", "grill", "plant pot", "watering can"]
         }
@@ -360,17 +418,20 @@
     {
       "name": "Stationery & Books",
       "code": "stationery_books",
+      "hebrew_name": "ציוד משרדי וספרים",
       "description": "Office supplies, books and magazines",
       "subcategories": [
         {
           "name": "Office Supplies",
           "code": "office_supplies",
+          "hebrew_name": "ציוד משרדי",
           "description": "Pens, staplers, paper and folders",
           "sample_keywords": ["pen", "paper", "stapler", "file folder"]
         },
         {
           "name": "Books & Magazines",
           "code": "books_magazines",
+          "hebrew_name": "ספרים ומגזינים",
           "description": "Printed books, novels, magazines, comics and textbooks",
           "sample_keywords": ["novel", "magazine", "comic", "dictionary", "textbook"]
         }
@@ -379,23 +440,27 @@
     {
       "name": "Entertainment & Leisure",
       "code": "entertainment_leisure",
+      "hebrew_name": "בידור ופנאי",
       "description": "Toys, games, sports, and event tickets",
       "subcategories": [
         {
           "name": "Toys & Games",
           "code": "toys_games",
+          "hebrew_name": "צעצועים ומשחקים",
           "description": "Toys, puzzles, board games, dolls and action figures",
           "sample_keywords": ["lego", "puzzle", "board game", "doll", "action figure"]
         },
         {
           "name": "Sporting Goods",
           "code": "sporting_goods",
+          "hebrew_name": "ציוד ספורט",
           "description": "Sports equipment and fitness accessories",
           "sample_keywords": ["tennis racket", "soccer ball", "yoga mat", "dumbbell"]
         },
         {
           "name": "Events & Tickets",
           "code": "events_tickets",
+          "hebrew_name": "אירועים וכרטיסים",
           "description": "Tickets for concerts, theater, cinema and sports events",
           "sample_keywords": ["concert ticket", "theater ticket", "cinema ticket", "sport event"]
         }
@@ -404,23 +469,27 @@
     {
       "name": "Pharmacy & Medical",
       "code": "pharmacy_medical",
+      "hebrew_name": "פארמה ורפואה",
       "description": "Prescription and OTC medicines, medical supplies",
       "subcategories": [
         {
           "name": "Prescription Medicines",
           "code": "prescription_medicines",
+          "hebrew_name": "תרופות מרשם",
           "description": "Medicines requiring a prescription",
           "sample_keywords": ["antibiotic", "insulin", "inhaler", "prescription drug"]
         },
         {
           "name": "OTC Medicines",
           "code": "otc_medicines",
+          "hebrew_name": "תרופות ללא מרשם",
           "description": "Over-the-counter medicines and supplements",
           "sample_keywords": ["pain reliever", "cough syrup", "allergy medicine", "vitamin"]
         },
         {
           "name": "Medical Supplies",
           "code": "medical_supplies",
+          "hebrew_name": "ציוד רפואי",
           "description": "Medical equipment and supplies like bandages, thermometers",
           "sample_keywords": ["bandage", "thermometer", "syringe", "crutches", "mask"]
         }

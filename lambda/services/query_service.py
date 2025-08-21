@@ -141,83 +141,75 @@ class QueryService:
             logger.error(f"LLM response generation error: {e}")
             return None
 
-    def _validate_filter_plan(self, query_plan: Dict) -> Dict:
-        """Clean and validate filter plan - no sorting needed"""
+    def _validate_filter_plan(self, query_plan: Dict[str, Any]) -> Dict[str, Any]:
+        """Clean and validate filter plan - remove empty/null values"""
 
-        # Clean up filter
-        clean_filter = {}
-        filter_params = query_plan.get("filter", {})
+        def clean_value(value: Any) -> Any | None:
+            if value is None:
+                return None
 
-        # Only include non-null, non-empty values
-        for key, value in filter_params.items():
-            if value is not None:
-                if isinstance(value, list) and len(value) > 0:
-                    clean_filter[key] = value
-                elif isinstance(value, dict):
-                    clean_dict = {k: v for k, v in value.items() if v is not None}
-                    if clean_dict:
-                        clean_filter[key] = clean_dict
-                elif not isinstance(value, (list, dict)):
-                    clean_filter[key] = value
+            if isinstance(value, list):
+                return value if value else None
 
-        return {
-            "filter": clean_filter
+            if isinstance(value, dict):
+                cleaned = {k: v for k, v in value.items() if v is not None}
+                return cleaned if cleaned else None
+
+            return value
+
+        filter_params = query_plan.get("filter", {}) or {}
+
+        clean_filter = {
+            key: cleaned
+            for key, value in filter_params.items()
+            if (cleaned := clean_value(value)) is not None
         }
+
+        return {"filter": clean_filter}
 
     def _filter_by_items(self, receipts: List[Dict[str, Any]], filter_params: Dict) -> List[Dict[str, Any]]:
         """Filter receipts by item-level criteria"""
 
-        categories = filter_params.get("categories", [])
-        subcategories = filter_params.get("subcategories", [])
-        keywords = filter_params.get("item_keywords", [])
-        price_range = filter_params.get("price_range", {})
+        categories: List[str] = filter_params.get("categories", [])
+        subcategories: List[str] = filter_params.get("subcategories", [])
+        keywords: List[str] = filter_params.get("item_keywords", [])
+        price_range: Dict[str, Any] = filter_params.get("price_range", {})
 
-        if not categories and not subcategories and not keywords and not price_range:
+        if not (categories or subcategories or keywords or price_range):
             return receipts
 
-        has_price_filter = False
-        min_price = max_price = None
-        if price_range:
-            min_price = price_range.get("min")
-            max_price = price_range.get("max")
-            if min_price is not None and max_price is not None:
-                min_price = float(min_price)
-                max_price = float(max_price)
-                has_price_filter = True
+        min_price = price_range.get("min")
+        max_price = price_range.get("max")
+        has_price_filter = min_price is not None and max_price is not None
 
-        filtered_receipts = []
+        if has_price_filter:
+            min_price, max_price = float(min_price), float(max_price)
 
-        for receipt in receipts:
-            receipt_matches = False
-            items = receipt.get('items', [])
+        def item_matches(item: Dict[str, Any]) -> bool:
+            """Check if a single item matches all filters."""
+            if categories and item.get("category") not in categories:
+                return False
 
-            for item in items:
-                item_matches = True
+            if subcategories and item.get("subcategory") not in subcategories:
+                return False
 
-                if categories:
-                    if item.get('category', '') not in categories:
-                        item_matches = False
+            if keywords:
+                name = (item.get("name") or "").lower()
+                if not any(kw.lower() in name for kw in keywords):
+                    return False
 
-                if subcategories and item_matches:
-                    if item.get('subcategory', '') not in subcategories:
-                        item_matches = False
+            if has_price_filter:
+                try:
+                    price = float(item.get("price", 0))
+                except (TypeError, ValueError):
+                    return False
+                if not (min_price <= price <= max_price):
+                    return False
 
-                if keywords and item_matches:
-                    item_name = item.get('name', '').lower()
-                    if not any(keyword.lower() in item_name for keyword in keywords):
-                        item_matches = False
+            return True
 
-                if has_price_filter and item_matches:
-                    item_price = float(item.get('price', 0))
-                    if not (min_price <= item_price <= max_price):
-                        item_matches = False
+        # Keep receipts that have at least one matching item
+        filtered = [receipt for receipt in receipts if any(item_matches(item) for item in receipt.get("items", []))]
 
-                if item_matches:
-                    receipt_matches = True
-                    break
-
-            if receipt_matches:
-                filtered_receipts.append(receipt)
-
-        logger.info(f"Filtered receipts: {len(filtered_receipts)} out of {len(receipts)}")
-        return filtered_receipts
+        logger.info("Filtered receipts: %d out of %d", len(filtered), len(receipts))
+        return filtered

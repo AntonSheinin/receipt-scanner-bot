@@ -95,7 +95,7 @@ class LLMService:
         except json.JSONDecodeError:
             return None
 
-    def _create_validated_result(self, llm_content: str, raw_text: str = None) -> Optional[ReceiptAnalysisResult]:
+    def _create_validated_result(self, llm_content: str, raw_text: str | None = None) -> Optional[ReceiptAnalysisResult]:
         """Parse LLM response and validate with strict Pydantic validation"""
 
         # Parse JSON from LLM response
