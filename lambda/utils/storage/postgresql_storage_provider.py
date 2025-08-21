@@ -4,7 +4,7 @@
 
 import logging
 import uuid
-from typing import Optional, Dict, List, Any, Literal
+from typing import Any, Literal
 import psycopg
 from psycopg.rows import dict_row
 from provider_interfaces import DocumentStorage
@@ -46,7 +46,7 @@ class PostgreSQLStorageProvider(DocumentStorage):
 
     # ----------------- Receipt Operations -----------------
 
-    def save_receipt_with_items(self, user_id: str, receipt_data: Dict[str, Any]) -> bool:
+    def save_receipt_with_items(self, user_id: str, receipt_data: dict[str, Any]) -> bool:
         """Store receipt with items in one transaction"""
 
         receipt_id = receipt_data.get('receipt_id', str(uuid.uuid4()))
@@ -96,7 +96,7 @@ class PostgreSQLStorageProvider(DocumentStorage):
             logger.error(f"Save receipt error: {e}")
             return False
 
-    def get_filtered_receipts(self, user_id: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    def get_filtered_receipts(self, user_id: str, filters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         """Get receipts with optional filtering"""
         where = ["r.user_id = %s"]
         params = [user_id]
@@ -174,7 +174,7 @@ class PostgreSQLStorageProvider(DocumentStorage):
             (user_id, receipt_id),
         )
 
-    def delete_last_uploaded_receipt(self, user_id: str) -> Optional[str]:
+    def delete_last_uploaded_receipt(self, user_id: str) -> str | None:
         result = self._execute("""
             DELETE FROM receipts
             WHERE user_id = %s
@@ -184,7 +184,7 @@ class PostgreSQLStorageProvider(DocumentStorage):
 
         return result and result.get("image_url")
 
-    def delete_all_receipts(self, user_id: str) -> List[str]:
+    def delete_all_receipts(self, user_id: str) -> list[str]:
         results = self._execute(
             "DELETE FROM receipts WHERE user_id = %s RETURNING image_url",
             (user_id,),
