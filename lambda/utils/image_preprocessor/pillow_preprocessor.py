@@ -4,6 +4,8 @@
 
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 import io
+import cv2
+import numpy as np
 import logging
 from typing import Optional, Tuple
 from dataclasses import dataclass
@@ -31,6 +33,72 @@ class EnhancementConfig:
     jpeg_quality: int = 95
     enable_auto_orient: bool = True
     enable_deskew: bool = False  # PIL doesn't have built-in deskew
+
+
+class ImageStitchingAndPreprocessing:
+    def stitch_receipts(img_paths):
+        """
+        Stitch multiple receipt images vertically, detecting overlaps automatically.
+        """
+        stitched = None
+
+        for path in img_paths:
+            img = cv2.imread(path)
+            if stitched is None:
+                stitched = img
+                continue
+
+            # Take last 200px of stitched image as template
+            template = cv2.cvtColor(stitched[-200:], cv2.COLOR_BGR2GRAY)
+            gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+            # Template matching
+            res = cv2.matchTemplate(gray_img, template, cv2.TM_CCOEFF_NORMED)
+            _, _, _, max_loc = cv2.minMaxLoc(res)
+            y_offset = max_loc[1] + template.shape[0]
+
+            # Crop overlapping part
+            img_cropped = img[y_offset:]
+            stitched = cv2.vconcat([stitched, img_cropped])
+
+        return stitched
+
+    def deskew_image(cv_img):
+        """
+        Deskew image using OpenCV
+        """
+        gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
+        gray = cv2.bitwise_not(gray)
+        thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+
+        coords = np.column_stack(np.where(thresh > 0))
+        angle = cv2.minAreaRect(coords)[-1]
+
+        if angle < -45:
+            angle = -(90 + angle)
+        else:
+            angle = -angle
+
+        (h, w) = cv_img.shape[:2]
+        M = cv2.getRotationMatrix2D((w // 2, h // 2), angle, 1.0)
+        rotated = cv2.warpAffine(cv_img, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+        return rotated
+
+    def preprocess_for_ocr(cv_img):
+        """
+        Preprocess for OCR: grayscale, denoise, threshold, autocontrast
+        """
+        gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
+        denoised = cv2.GaussianBlur(gray, (3,3), 0)
+        thresh = cv2.adaptiveThreshold(
+            denoised, 255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            11, 2
+        )
+        pil_img = Image.fromarray(thresh)
+        pil_img = ImageOps.autocontrast(pil_img, cutoff=2)
+        return pil_img
 
 
 class ImagePreprocessorPillow:

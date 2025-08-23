@@ -58,6 +58,23 @@ class TelegramService:
             self._send_fallback_message(chat_id)
             return False
 
+    def send_photo(self, chat_id: int, photo_path: str, caption: str = "") -> bool:
+        """
+        Send a photo to Telegram chat using a local file path.
+        """
+        try:
+            with open(photo_path, "rb") as photo_file:
+                self.bot.send_photo(chat_id, photo_file, caption=caption)
+            return True
+
+        except telebot.apihelper.ApiTelegramException as e:
+            logger.error(f"Telegram API error while sending photo: {e}")
+            return False
+
+        except Exception as e:
+            logger.error(f"Unexpected error while sending photo: {e}")
+            return False
+
     def send_typing(self, chat_id: int) -> bool:
         """Send typing indicator"""
         try:

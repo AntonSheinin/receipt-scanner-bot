@@ -1,5 +1,5 @@
 """
-Receipt Scanner Bot Stack - AWS CDK Infrastructure
+    Receipt Scanner Bot Stack - AWS CDK Infrastructure
 """
 
 import os
@@ -8,9 +8,11 @@ from typing import Any, Tuple
 
 import aws_cdk.aws_rds as rds
 import aws_cdk.aws_ec2 as ec2
-from constructs import Construct
-from aws_cdk.aws_lambda_python_alpha import PythonFunction
 from aws_cdk.aws_lambda import IFunction
+from aws_cdk.aws_lambda_python_alpha import PythonFunction, BundlingOptions
+import aws_cdk.aws_lambda_python_alpha as _lambda_python
+
+from constructs import Construct
 from aws_cdk import (
     Stack,
     Duration,
@@ -27,7 +29,7 @@ from aws_cdk import (
     aws_s3 as s3,
     aws_sqs as sqs,
     aws_cloudwatch as cloudwatch,
-    custom_resources as cr
+    custom_resources as cr,
 )
 
 
@@ -177,11 +179,25 @@ class ReceiptScannerBotStack(Stack):
             self, "ConsumerHandler",
             entry="lambda",
             runtime=_lambda.Runtime.PYTHON_3_12,
-            index="consumer_handler.py",  # Consumer lambda file
+            index="consumer_handler.py",
             handler="lambda_handler",
             role=role,
             timeout=Duration.minutes(10),  # Longer timeout for processing
             memory_size=1024,  # More memory for OCR/LLM processing
+            bundling=_lambda_python.BundlingOptions(
+            # Critical: exclude large files and cache directories
+                asset_excludes=[
+                    "**/__pycache__/**",
+                    "**/*.pyc",
+                    "**/.git/**",
+                    "**/tests/**",
+                    "**/docs/**",
+                    "**/*.md",
+                    "requirements-dev.txt",
+                    ".env*",
+                    ".venv/**"
+                ]
+            ),
             environment={
                 "DB_USER": os.getenv('DB_USER'),
                 "DB_PASSWORD": os.getenv('DB_PASSWORD'),
@@ -212,9 +228,8 @@ class ReceiptScannerBotStack(Stack):
             lambda_event_sources.SqsEventSource(
                 queue,
                 batch_size=1,  # Process one message at a time for better error handling
-                max_batching_window=Duration.seconds(5),
                 max_concurrency=15,  # Control concurrent processing
-                report_batch_item_failures=True  # Enable partial batch failure handling
+                # report_batch_item_failures=True  # Enable partial batch failure handling - only need for batch_size > 1
             )
         )
 
@@ -226,7 +241,9 @@ class ReceiptScannerBotStack(Stack):
         # Dead Letter Queue for failed messages
         dlq = sqs.Queue(
             self, "ProcessingDeadLetterQueue",
-            queue_name="receipt-bot-processing-dlq",
+            queue_name="receipt-bot-processing-dlq.fifo",
+            fifo=True,
+            content_based_deduplication=True,
             retention_period=Duration.days(7),
             removal_policy=RemovalPolicy.DESTROY
         )
@@ -234,7 +251,9 @@ class ReceiptScannerBotStack(Stack):
         # Main processing queue
         main_queue = sqs.Queue(
         self, "ProcessingQueue",
-        queue_name="receipt-bot-processing",
+        queue_name="receipt-bot-processing.fifo",
+        fifo=True,
+        content_based_deduplication=False,
         visibility_timeout=Duration.minutes(15),
         retention_period=Duration.days(4),
         receive_message_wait_time=Duration.seconds(20),
@@ -247,9 +266,12 @@ class ReceiptScannerBotStack(Stack):
 
         return main_queue, dlq
 
-    def _create_monitoring(self, queue: sqs.Queue, dlq: sqs.Queue,
-                      producer_lambda: _lambda.Function,
-                      consumer_lambda: _lambda.Function) -> None:
+    def _create_monitoring(
+            self, queue: sqs.Queue,
+            dlq: sqs.Queue,
+            producer_lambda: _lambda.Function,
+            consumer_lambda: _lambda.Function
+        ) -> None:
         """Create CloudWatch monitoring and alarms"""
 
         # Queue depth alarm
@@ -385,6 +407,20 @@ class ReceiptScannerBotStack(Stack):
             index="webhook_setter_handler.py",
             handler="lambda_handler",
             runtime=_lambda.Runtime.PYTHON_3_12,
+            bundling=_lambda_python.BundlingOptions(
+            # Critical: exclude large files and cache directories
+                asset_excludes=[
+                    "**/__pycache__/**",
+                    "**/*.pyc",
+                    "**/.git/**",
+                    "**/tests/**",
+                    "**/docs/**",
+                    "**/*.md",
+                    "requirements-dev.txt",
+                    ".env*",
+                    ".venv/**"
+                ]
+            ),
             timeout=Duration.minutes(2),
             environment={
                 "TELEGRAM_BOT_TOKEN": os.getenv('TELEGRAM_BOT_TOKEN', ''),

@@ -1,84 +1,96 @@
 """
-    Consumer Lambda - Processes SQS Messages via Orchestration Service
+    Consumer Lambda - Processes SQS Messages via OrchestratorService (FIFO aware, album batching)
 """
 
 import json
 import logging
+from collections import defaultdict
 from typing import Dict, Any
 from config import setup_logging
 from services.orchestrator_service import OrchestratorService
-
 
 setup_logging()
 logger = logging.getLogger(__name__)
 
 orchestrator_service = OrchestratorService()
 
+
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
-    Consumer Lambda - Processes SQS messages using OrchestratorService
+        Processes SQS messages sequentially (FIFO) and batches album messages by media_group_id.
+        Single messages are processed immediately.
     """
 
-    logger.info(f"Consumer processing {len(event.get('Records', []))} SQS messages")
+    records = event.get("Records", [])
+    logger.info(f"Consumer processing {len(records)} SQS messages")
 
     processed_count = 0
     failed_count = 0
     results = []
 
-    for record in event.get('Records', []):
+    # Group album messages by media_group_id
+    album_batches = defaultdict(list)
+    single_messages = []
+
+    for record in records:
         try:
-            # Parse the SQS message
-            message_body = json.loads(record['body'])
-            attributes = record['messageAttributes']
-            telegram_message = message_body['telegram_message']
-            timestamp = message_body.get('timestamp')
-            chat_id = telegram_message['chat']['id']
-            telegram_message['message_type'] = attributes['MessageType']['stringValue']
+            message_body = json.loads(record["body"])
+            attrs = record.get("messageAttributes", {})
 
-            logger.info(f"Processing message for chat_id: {chat_id} (queued at: {timestamp})")
+            chat_id = int(attrs.get("chat_id", {}).get("stringValue", 0))
+            media_group_id = attrs.get("media_group_id", {}).get("stringValue")
+            message_type = attrs.get("message_type", {}).get("stringValue", "other")
 
-            result = orchestrator_service.process_telegram_message(telegram_message)
+            # Inject message_type into body
+            message_body["message_type"] = message_type
 
-            results.append({
-                "chat_id": chat_id,
-                "status": "success",
-                "result": result
-            })
+            if media_group_id:
+                album_batches[media_group_id].append(message_body)
 
-            processed_count += 1
-            logger.info(f"Successfully processed message for chat_id: {chat_id}")
+            else:
+                single_messages.append(message_body)
 
         except Exception as e:
-            logger.error(f"Failed to process SQS message: {e}", exc_info=True)
+            logger.error(f"Failed to parse SQS message: {e}", exc_info=True)
             failed_count += 1
+            results.append({
+                "chat_id": chat_id if "chat_id" in locals() else None,
+                "status": "error",
+                "error": str(e)
+            })
 
-            # Try to extract chat_id for error reporting
-            try:
-                chat_id = json.loads(record['body'])['telegram_message']['chat']['id']
-                results.append({
-                    "chat_id": chat_id,
-                    "status": "error",
-                    "error": str(e)
-                })
-            except:
-                results.append({
-                    "status": "error",
-                    "error": f"Failed to parse message: {str(e)}"
-                })
+    # Process single messages immediately
+    for message in single_messages:
+        try:
+            chat_id = message["chat"]["id"]
+            result = orchestrator_service.process_telegram_message(message)
+            results.append({"chat_id": chat_id, "status": "success", "result": result})
+            processed_count += 1
+        except Exception as e:
+            logger.error(f"Failed processing single message for chat_id {chat_id}: {e}", exc_info=True)
+            failed_count += 1
+            results.append({"chat_id": chat_id, "status": "error", "error": str(e)})
 
-    # Prepare response
+    # Process album batches
+    for media_group_id, messages in album_batches.items():
+        try:
+            chat_id = messages[0]["chat"]["id"]  # All messages in the album share the same chat_id
+            logger.info(f"Processing album {media_group_id} with {len(messages)} messages for chat_id {chat_id}")
+            result = orchestrator_service.process_telegram_album(messages)
+            results.append({"chat_id": chat_id, "status": "success", "result": result})
+            processed_count += len(messages)
+        except Exception as e:
+            logger.error(f"Failed processing album {media_group_id}: {e}", exc_info=True)
+            failed_count += len(messages)
+            results.append({"chat_id": chat_id, "status": "error", "error": str(e)})
+
     response = {
         "statusCode": 200,
         "processed": processed_count,
         "failed": failed_count,
-        "total": len(event.get('Records', [])),
+        "total": len(records),
         "results": results
     }
 
-    logger.info(f"Consumer batch processing complete: processed={processed_count}, failed={failed_count}")
-
-    # If any messages failed, log details but don't fail the entire batch
-    if failed_count > 0:
-        logger.warning(f"Some messages failed processing: {failed_count}/{len(event.get('Records', []))}")
-
+    logger.info(f"Consumer batch complete: processed={processed_count}, failed={failed_count}")
     return response

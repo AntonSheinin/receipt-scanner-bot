@@ -26,9 +26,18 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Optional[Dict[str, An
 
     logger.info(f"Producer received webhook: {json.dumps(event, default=str)}")
 
-    # Parse update_id for deduplication
-    body = json.loads(event.get('body', '{}')) if event.get('body') else {}
-    update_id = body.get('update_id')
+    # Handle API Gateway health check
+    if event.get('httpMethod') == 'GET':
+        return create_response(200, {"status": "ok", "message": "Telegram webhook endpoint"})
+
+    # Parse body
+    raw_body = event.get("body")
+    if not raw_body:
+        logger.error("No body in event")
+        return create_response(200, {"status": "No body in event"})
+
+    body = json.loads(raw_body) if isinstance(raw_body, str) else raw_body
+    update_id = body.get("update_id")
 
     # Simple deduplication check
     if update_id and update_id in _processed_updates:
@@ -40,17 +49,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Optional[Dict[str, An
         _processed_updates.add(update_id)
         if len(_processed_updates) > 1000:
             _processed_updates.clear()
-
-    # Handle API Gateway health check
-    if event.get('httpMethod') == 'GET':
-        return create_response(200, {"status": "ok", "message": "Telegram webhook endpoint"})
-
-    # Parse Telegram update
-    raw_body = event.get('body')
-    body = json.loads(raw_body) if isinstance(raw_body, str) else raw_body
-    if not body:
-        logger.error("No body in event")
-        return create_response(200, {"status": "No body in event"})
 
     message = body.get('message')
     if not message:
