@@ -1,27 +1,27 @@
 [project]
 name = "receipt-scanner-bot"
-version = "0.1.0"
+version = "0.6.0"
 description = "Telegram bot for scanning and analyzing receipts"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     # Lambda runtime dependencies
-    "pyTelegramBotAPI>=4.15.0",
-    "google-cloud-vision>=3.4.0",
-    "Pillow>=10.2.0",
-    "openai>=1.52.0",
-    "python-dateutil>=2.9.0.post0",
-    "psycopg[binary]>=3.2.9",
-    "opencv-python-headless"
+    pyTelegramBotAPI==4.28.0
+    google-cloud-vision==3.4.0
+    Pillow==11.3.0
+    openai==1.52.0
+    pydantic==2.11.7
+    psycopg[binary]==3.2.9
+    python-dateutil
+    opencv-python-headless
 ]
 
 [project.optional-dependencies]
 # CDK deployment dependencies
 cdk = [
     "aws-cdk-lib>=2.150.0",
-    "aws-cdk.aws-lambda-python-alpha==2.206.0a0",
     "constructs>=10.0.0",
-    "python-dotenv>=1.0.0",
+    "python-dotenv>=1.0.0"
 ]
 
 [tool.ty.rules]

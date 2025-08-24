@@ -8,8 +8,8 @@ from typing import Any, Tuple
 
 import aws_cdk.aws_rds as rds
 import aws_cdk.aws_ec2 as ec2
+import aws_cdk.aws_ecr_assets as ecr_assets
 from aws_cdk.aws_lambda import IFunction
-from aws_cdk.aws_lambda_python_alpha import PythonFunction, BundlingOptions
 import aws_cdk.aws_lambda_python_alpha as _lambda_python
 
 from constructs import Construct
@@ -50,6 +50,8 @@ class ReceiptScannerBotStack(Stack):
         # Create single log group for all components
         main_log_group = self._create_main_log_group()
 
+        self.lambda_image = self._create_lambda_image()
+
         # Create database infrastructure
         database = self._create_database_infrastructure()
         self._create_database_schema(database, main_log_group)
@@ -77,6 +79,13 @@ class ReceiptScannerBotStack(Stack):
         self._create_outputs(
             api_gateway, receipt_bucket, database, processing_queue,
             bot_token, main_log_group, producer_lambda, consumer_lambda
+        )
+
+    def _create_lambda_image(self) -> ecr_assets.DockerImageAsset:
+        """Create single shared Docker image for all Lambda functions"""
+        return ecr_assets.DockerImageAsset(
+            self, "ReceiptScannerLambdaImage",
+            directory="lambda"
         )
 
     def _create_main_log_group(self) -> logs.LogGroup:
@@ -147,57 +156,40 @@ class ReceiptScannerBotStack(Stack):
     def _create_producer_lambda(self, role: iam.Role, bot_token: str, queue: sqs.Queue, log_group: logs.LogGroup,) -> _lambda.Function:
         """Create Producer Lambda (webhook handler - queues messages only)"""
 
-        return PythonFunction(
+        return _lambda.Function(
             self, "ProducerHandler",
-            entry="lambda",
-            runtime=_lambda.Runtime.PYTHON_3_12,
-            index="telegram_bot_handler.py",  # Producer lambda file
-            handler="lambda_handler",
+            code=_lambda.Code.from_ecr_image(
+                repository=self.lambda_image.repository,
+                tag_or_digest=self.lambda_image.asset_hash,
+                cmd=["telegram_bot_handler.lambda_handler"]
+            ),
+            handler=_lambda.Handler.FROM_IMAGE,
+            runtime=_lambda.Runtime.FROM_IMAGE,
             role=role,
-            timeout=Duration.seconds(30),  # Short timeout for fast webhook response
-            memory_size=256,  # Minimal memory for webhook handling
+            timeout=Duration.seconds(30),
+            memory_size=256,
             environment={
                 "TELEGRAM_BOT_TOKEN": bot_token,
                 "SQS_QUEUE_URL": queue.queue_url
             },
-            log_group=log_group,
-            logging_format=_lambda.LoggingFormat.TEXT,
-            description="Producer Lambda - Handles Telegram webhooks and queues messages"
+            log_group=log_group
         )
 
-    def _create_consumer_lambda(
-        self,
-        role: iam.Role,
-        queue: sqs.Queue,
-        bucket: s3.Bucket,
-        log_group: logs.LogGroup,
-        database: rds.DatabaseInstance
-        ) -> _lambda.Function:
-        """Create Consumer Lambda (processes SQS messages)"""
-
-        consumer_lambda = PythonFunction(
+    def _create_consumer_lambda(self, role: iam.Role, queue: sqs.Queue, bucket: s3.Bucket,
+                               log_group: logs.LogGroup, database: rds.DatabaseInstance) -> _lambda.Function:
+        """Create Consumer Lambda using shared container image"""
+        consumer_lambda = _lambda.Function(
             self, "ConsumerHandler",
-            entry="lambda",
-            runtime=_lambda.Runtime.PYTHON_3_12,
-            index="consumer_handler.py",
-            handler="lambda_handler",
-            role=role,
-            timeout=Duration.minutes(10),  # Longer timeout for processing
-            memory_size=1024,  # More memory for OCR/LLM processing
-            bundling=_lambda_python.BundlingOptions(
-            # Critical: exclude large files and cache directories
-                asset_excludes=[
-                    "**/__pycache__/**",
-                    "**/*.pyc",
-                    "**/.git/**",
-                    "**/tests/**",
-                    "**/docs/**",
-                    "**/*.md",
-                    "requirements-dev.txt",
-                    ".env*",
-                    ".venv/**"
-                ]
+            code=_lambda.Code.from_ecr_image(
+                repository=self.lambda_image.repository,
+                tag_or_digest=self.lambda_image.asset_hash,
+                cmd=["consumer_handler.lambda_handler"]
             ),
+            handler=_lambda.Handler.FROM_IMAGE,
+            runtime=_lambda.Runtime.FROM_IMAGE,
+            role=role,
+            timeout=Duration.minutes(10),
+            memory_size=1536,
             environment={
                 "DB_USER": os.getenv('DB_USER'),
                 "DB_PASSWORD": os.getenv('DB_PASSWORD'),
@@ -217,22 +209,12 @@ class ReceiptScannerBotStack(Stack):
                 "OPENAI_API_KEY": os.getenv('OPENAI_API_KEY'),
                 "OPENAI_MODEL_ID": os.getenv('OPENAI_MODEL_ID')
             },
-            log_group=log_group,
-            logging_format=_lambda.LoggingFormat.TEXT,
-            retry_attempts=0,  # SQS handles retries
-            description="Consumer Lambda - Processes SQS messages via OrchestrationService"
+            log_group=log_group
         )
 
-        # Add SQS event source to trigger consumer
         consumer_lambda.add_event_source(
-            lambda_event_sources.SqsEventSource(
-                queue,
-                batch_size=1,  # Process one message at a time for better error handling
-                max_concurrency=15,  # Control concurrent processing
-                # report_batch_item_failures=True  # Enable partial batch failure handling - only need for batch_size > 1
-            )
+            lambda_event_sources.SqsEventSource(queue, batch_size=1, max_concurrency=15)
         )
-
         return consumer_lambda
 
     def _create_processing_queue(self) -> Tuple[sqs.Queue, sqs.Queue]:
@@ -400,42 +382,21 @@ class ReceiptScannerBotStack(Stack):
         webhook_setup.node.add_dependency(api_gateway)
 
     def _create_webhook_setter_lambda(self, log_group: logs.LogGroup) -> _lambda.Function:
-        """Create Lambda function for webhook setup"""
-        return PythonFunction(
+        """Create webhook setter Lambda using shared container image"""
+        return _lambda.Function(
             self, "WebhookSetterHandler",
-            entry="lambda",
-            index="webhook_setter_handler.py",
-            handler="lambda_handler",
-            runtime=_lambda.Runtime.PYTHON_3_12,
-            bundling=_lambda_python.BundlingOptions(
-            # Critical: exclude large files and cache directories
-                asset_excludes=[
-                    "**/__pycache__/**",
-                    "**/*.pyc",
-                    "**/.git/**",
-                    "**/tests/**",
-                    "**/docs/**",
-                    "**/*.md",
-                    "requirements-dev.txt",
-                    ".env*",
-                    ".venv/**"
-                ]
+            code=_lambda.Code.from_ecr_image(
+                repository=self.lambda_image.repository,
+                tag_or_digest=self.lambda_image.asset_hash,
+                cmd=["webhook_setter_handler.lambda_handler"]
             ),
+            handler=_lambda.Handler.FROM_IMAGE,
+            runtime=_lambda.Runtime.FROM_IMAGE,
             timeout=Duration.minutes(2),
             environment={
-                "TELEGRAM_BOT_TOKEN": os.getenv('TELEGRAM_BOT_TOKEN', ''),
-                "BEDROCK_REGION": os.getenv('BEDROCK_REGION', ''),
-                "BEDROCK_MODEL_ID": os.getenv('BEDROCK_MODEL_ID', ''),
-                "OCR_PROVIDER": os.getenv('OCR_PROVIDER', ''),
-                "LLM_PROVIDER": os.getenv('LLM_PROVIDER', ''),
-                "DOCUMENT_PROCESSING_MODE": os.getenv('DOCUMENT_PROCESSING_MODE', ''),
-                "OCR_PROCESSING_MODE": os.getenv('OCR_PROCESSING_MODE', ''),
-                "GOOGLE_CREDENTIALS_JSON": os.getenv('GOOGLE_CREDENTIALS_JSON', ''),
-                "OPENAI_API_KEY": os.getenv('OPENAI_API_KEY', ''),
-                "OPENAI_MODEL_ID": os.getenv('OPENAI_MODEL_ID', '')
+                "TELEGRAM_BOT_TOKEN": os.getenv('TELEGRAM_BOT_TOKEN')
             },
-            log_group=log_group,
-            logging_format=_lambda.LoggingFormat.TEXT
+            log_group=log_group
         )
 
     def _create_outputs(self, api_gateway: apigwv2.HttpApi, bucket: s3.Bucket,
@@ -552,13 +513,17 @@ class ReceiptScannerBotStack(Stack):
         """Create database schema using custom resource"""
 
         # Create Lambda function for schema initialization from file
-        schema_lambda = PythonFunction(
+        schema_lambda =  _lambda.Function(
             self, "DatabaseSchemaHandler",
-            entry="lambda",
-            runtime=_lambda.Runtime.PYTHON_3_12,
-            index="database_schema_handler.py",
-            handler="lambda_handler",
+            code=_lambda.Code.from_ecr_image(
+                repository=self.lambda_image.repository,
+                tag_or_digest=self.lambda_image.asset_hash,
+                cmd=["database_schema_handler.lambda_handler"]
+            ),
+            handler=_lambda.Handler.FROM_IMAGE,
+            runtime=_lambda.Runtime.FROM_IMAGE,
             timeout=Duration.minutes(2),
+            memory_size=256,
             environment={
                 "DB_HOST": database.instance_endpoint.hostname,
                 "DB_PORT": os.getenv('DB_PORT'),
@@ -566,8 +531,6 @@ class ReceiptScannerBotStack(Stack):
                 "DB_USER": os.getenv('DB_USER'),
                 "DB_PASSWORD": os.getenv('DB_PASSWORD')
             },
-            memory_size=256,
-            retry_attempts=0,
             log_group=log_group,
             logging_format=_lambda.LoggingFormat.TEXT,
         )
@@ -589,3 +552,14 @@ class ReceiptScannerBotStack(Stack):
 
         # Ensure schema is created after database is ready
         schema_resource.node.add_dependency(database)
+
+    def _create_schema_lambda_role(self) -> iam.Role:
+        """Create IAM role for database schema Lambda"""
+        return iam.Role(
+            self, "DatabaseSchemaLambdaRole",
+            assumed_by=iam.ServicePrincipal("lambda.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
+            ]
+        )
+

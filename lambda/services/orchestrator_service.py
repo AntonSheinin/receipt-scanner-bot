@@ -13,7 +13,7 @@ from services.telegram_service import TelegramService
 from services.storage_service import StorageService
 from config import MAX_RECEIPTS_PER_USER, setup_logging
 from utils.helpers import get_secure_user_id
-from urils.image_preprocessor.pillow_preprocessor import ImageStitchingAndPreprocessing
+from utils.image_preprocessor.pillow_preprocessor import ImageStitchingAndPreprocessing
 
 
 setup_logging()
@@ -59,7 +59,7 @@ class OrchestratorService:
                         continue
                     photo_sizes = msg["photo"]
                     file_id = photo_sizes[-1]["file_id"]
-                    local_path = self.telegram_service.download_file(file_id, download_dir=tmp_dir)
+                    local_path = self.telegram_service.download_photo(file_id, download_dir=tmp_dir)
                     img_paths.append(local_path)
 
                 if not img_paths:

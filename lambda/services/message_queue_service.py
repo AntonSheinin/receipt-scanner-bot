@@ -56,7 +56,7 @@ class MessageQueueService:
                 # Deduplication: use update_id if present, else message_id
                 kwargs["MessageDeduplicationId"] = str(telegram_message.get("update_id") or telegram_message.get("message_id"))
 
-            response = self.sqs.send_message(**kwargs)
+            response = self.sqs_client.send_message(**kwargs)
             logger.info(f"Queued message to SQS: {response.get('MessageId')}")
             return True
 
