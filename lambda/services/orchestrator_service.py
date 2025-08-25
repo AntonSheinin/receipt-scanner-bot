@@ -39,13 +39,13 @@ class OrchestratorService:
 
     def process_telegram_album(self, album_messages: list):
         """
-        Combine all images in a Telegram album, preprocess them, and call process_telegram_message.
+            Combine all images in a Telegram album, preprocess them, and call process_telegram_message.
         """
         if not album_messages:
             logger.warning("Empty album received, skipping processing")
             return None
 
-        chat_id = album_messages[0]['chat']['id']
+        chat_id = album_messages[0]['chat_id']
         logger.info(f"Processing album with {len(album_messages)} images for chat_id {chat_id}")
 
         # Use a single temporary directory for all downloaded images
@@ -59,7 +59,7 @@ class OrchestratorService:
                         continue
                     photo_sizes = msg["photo"]
                     file_id = photo_sizes[-1]["file_id"]
-                    local_path = self.telegram_service.download_photo(file_id, download_dir=tmp_dir)
+                    local_path = self.telegram_service.download_file(file_id, download_dir=tmp_dir)
                     img_paths.append(local_path)
 
                 if not img_paths:
@@ -75,11 +75,11 @@ class OrchestratorService:
                 with tempfile.NamedTemporaryFile(suffix=".png") as tmp_file:
                     preprocessed_img.save(tmp_file.name)
                     combined_message = {
-                        "chat": {"id": chat_id},
+                        "chat_id": chat_id,
                         "photo": [{"file_path": tmp_file.name}]
                     }
 
-                    self.telegram_service.send_photo(chat_id, tmp_file.name, caption="📸 Combined & preprocessed album")
+                    self.telegram_service.send_photo(chat_id, tmp_file.name, caption="📸 Combined & preprocessed photo")
                     # return self.process_telegram_message(combined_message)
 
             except Exception as e:
@@ -89,7 +89,7 @@ class OrchestratorService:
     def process_telegram_message(self, telegram_message: Dict[str, Any]) -> Dict[str, Any]:
         """Main orchestration method - routes message to appropriate service"""
 
-        chat_id = telegram_message['chat']['id']
+        chat_id = telegram_message['chat_id']
         message_type = telegram_message['message_type']
 
         logger.info(f"Orchestrating {message_type} message for chat_id: {chat_id}")
@@ -105,10 +105,7 @@ class OrchestratorService:
                 return self._handle_command_message(telegram_message, chat_id)
 
             logger.warning(f"Unknown message type for chat_id: {chat_id}")
-            self.telegram_service.send_message(
-                chat_id,
-                "❓ לא הבנתי את סוג ההודעה. אנא שלח תמונה של קבלה או שאל שאלה."
-            )
+            self.telegram_service.send_message(chat_id, "❓ לא הבנתי את סוג ההודעה. אנא שלח תמונה של קבלה או שאל שאלה.")
             return {"status": "unknown_message_type"}
 
         except Exception as e:

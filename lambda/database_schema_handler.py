@@ -60,7 +60,7 @@ def create_database_schema(event):
                         id UUID PRIMARY KEY,
                         user_id VARCHAR(64) NOT NULL,
                         store_name VARCHAR(100),
-                        date DATE,
+                        purchasing_date DATE,
                         total DECIMAL(10,2),
                         payment_method VARCHAR(20),
                         receipt_number VARCHAR(50),

@@ -213,7 +213,11 @@ class ReceiptScannerBotStack(Stack):
         )
 
         consumer_lambda.add_event_source(
-            lambda_event_sources.SqsEventSource(queue, batch_size=1, max_concurrency=15)
+            lambda_event_sources.SqsEventSource(
+                queue,
+                batch_size=5, # for processing multiple messages of one album at once
+                max_concurrency=15
+            )
         )
         return consumer_lambda
 

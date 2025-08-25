@@ -19,7 +19,16 @@ class MessageQueueService:
     def __init__(self):
         self.sqs_client = get_sqs_client()
         self.queue_url = SQS_QUEUE_URL
-        self.is_fifo = self.queue_url.endswith(".fifo")
+
+    def _get_message_type(self, telegram_message: Dict[str, Any]) -> MessageType:
+        """Extract message type from Telegram message"""
+        if "photo" in telegram_message:
+            return MessageType.PHOTO.value
+        if "text" in telegram_message:
+            return MessageType.TEXT_QUERY.value
+        if "command" in telegram_message:
+            return MessageType.COMMAND.value
+        return MessageType.UNKNOWN.value
 
     def queue_telegram_message(self, telegram_message: Dict[str, Any]) -> bool:
         """Queue raw Telegram message for processing by consumer lambda"""
@@ -29,32 +38,26 @@ class MessageQueueService:
                 logger.error("SQS_QUEUE_URL not configured")
                 return False
 
+            chat_id = str(telegram_message['chat']['id'])
+            media_group_id = str(telegram_message.get("media_group_id", chat_id))
+
             body = json.dumps(telegram_message)
             kwargs = {
                 "QueueUrl": self.queue_url,
                 "MessageBody": body,
+                "MessageGroupId": media_group_id,
+                "MessageDeduplicationId": str(telegram_message.get("update_id") or telegram_message.get("message_id")),
                 "MessageAttributes": {
                     "chat_id": {
-                        "StringValue": str(telegram_message["chat"]["id"]),
-                        "DataType": "String"
-                    },
-                    "media_group_id": {
-                        "StringValue": str(telegram_message.get("media_group_id", "")),
+                        "StringValue": chat_id,
                         "DataType": "String"
                     },
                     "message_type": {
-                        "StringValue": telegram_message.get("photo") and "photo" or "other",
+                        "StringValue": self._get_message_type(telegram_message),
                         "DataType": "String"
-                    }
+                    },
                 }
             }
-
-            if self.is_fifo:
-                # Use media_group_id for albums, fallback to chat_id for single messages
-                kwargs["MessageGroupId"] = telegram_message.get("media_group_id") or str(telegram_message["chat"]["id"])
-
-                # Deduplication: use update_id if present, else message_id
-                kwargs["MessageDeduplicationId"] = str(telegram_message.get("update_id") or telegram_message.get("message_id"))
 
             response = self.sqs_client.send_message(**kwargs)
             logger.info(f"Queued message to SQS: {response.get('MessageId')}")

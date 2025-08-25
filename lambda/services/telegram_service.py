@@ -106,6 +106,36 @@ class TelegramService:
             logger.error(f"Photo download error: {e}")
             return None
 
+    def download_file(self, file_id: str, download_dir: str) -> str:
+        """
+            Download a file from Telegram and save it locally.
+
+            Args:
+                file_id: Telegram file_id of the file to download.
+                download_dir: Directory to save the downloaded file.
+
+            Returns:
+                Local path to the downloaded file.
+        """
+        try:
+            file_info = self.bot.get_file(file_id)
+            downloaded_file = self.bot.download_file(file_info.file_path)
+
+            import os
+            os.makedirs(download_dir, exist_ok=True)
+            local_path = os.path.join(download_dir, os.path.basename(file_info.file_path))
+
+            with open(local_path, "wb") as f:
+                f.write(downloaded_file)
+
+            return local_path
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"File download error: {e}")
+            raise
+
     def send_error(self, chat_id: int, message: str) -> Dict:
         """Send error message and return response"""
         self.send_message(chat_id, f"❌ {message}")

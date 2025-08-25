@@ -35,17 +35,20 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     for record in records:
         try:
             message_body = json.loads(record["body"])
-            attrs = record.get("messageAttributes", {})
+            message_attributes = record["messageAttributes"]
+            message_group_id = record["attributes"]["MessageGroupId"]
 
-            chat_id = int(attrs.get("chat_id", {}).get("stringValue", 0))
-            media_group_id = attrs.get("media_group_id", {}).get("stringValue")
-            message_type = attrs.get("message_type", {}).get("stringValue", "other")
+            chat_id = int(message_attributes["chat_id"]["stringValue"])
+            message_type = message_attributes["message_type"]["stringValue"]
 
             # Inject message_type into body
             message_body["message_type"] = message_type
+            message_body["chat_id"] = chat_id
 
-            if media_group_id:
-                album_batches[media_group_id].append(message_body)
+            logger.info(f"Processing message for chat_id: {chat_id}, message_group_id: {message_group_id}")
+
+            if message_group_id != str(chat_id):
+                album_batches[message_group_id].append(message_body)
 
             else:
                 single_messages.append(message_body)
@@ -62,7 +65,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     # Process single messages immediately
     for message in single_messages:
         try:
-            chat_id = message["chat"]["id"]
+            chat_id = message["chat_id"]
             result = orchestrator_service.process_telegram_message(message)
             results.append({"chat_id": chat_id, "status": "success", "result": result})
             processed_count += 1
@@ -74,11 +77,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     # Process album batches
     for media_group_id, messages in album_batches.items():
         try:
-            chat_id = messages[0]["chat"]["id"]  # All messages in the album share the same chat_id
+            chat_id = messages[0]["chat_id"]  # All messages in the album share the same chat_id
             logger.info(f"Processing album {media_group_id} with {len(messages)} messages for chat_id {chat_id}")
             result = orchestrator_service.process_telegram_album(messages)
             results.append({"chat_id": chat_id, "status": "success", "result": result})
             processed_count += len(messages)
+
         except Exception as e:
             logger.error(f"Failed processing album {media_group_id}: {e}", exc_info=True)
             failed_count += len(messages)

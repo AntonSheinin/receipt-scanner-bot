@@ -36,69 +36,80 @@ class EnhancementConfig:
 
 
 class ImageStitchingAndPreprocessing:
-    def stitch_receipts(img_paths):
-        """
-        Stitch multiple receipt images vertically, detecting overlaps automatically.
-        """
-        stitched = None
+    @staticmethod
+    def _load_cv2_with_exif(path: str) -> np.ndarray:
+        """Read image honoring EXIF orientation and return BGR for OpenCV."""
+        pil = Image.open(path)
+        pil = ImageOps.exif_transpose(pil)       # respect EXIF orientation
+        if pil.mode not in ("RGB", "L"):
+            pil = pil.convert("RGB")
+        arr = np.array(pil)
+        if arr.ndim == 2:
+            arr = cv2.cvtColor(arr, cv2.COLOR_GRAY2BGR)
+        else:
+            arr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
 
+        # Heuristic: receipts should be portrait; rotate if clearly landscape
+        h, w = arr.shape[:2]
+        if w > h:
+            arr = cv2.rotate(arr, cv2.ROTATE_90_CLOCKWISE)
+        return arr
+
+    @staticmethod
+    def stitch_receipts(img_paths):
+        """Stitch multiple receipt images vertically with overlap detection."""
+        stitched = None
         for path in img_paths:
-            img = cv2.imread(path)
+            img = ImageStitchingAndPreprocessing._load_cv2_with_exif(path)
             if stitched is None:
                 stitched = img
                 continue
 
-            # Take last 200px of stitched image as template
-            template = cv2.cvtColor(stitched[-200:], cv2.COLOR_BGR2GRAY)
+            # use a safe slice height (min of 200 or 1/4 of current height)
+            slice_h = max(40, min(200, stitched.shape[0] // 4))
+            template = cv2.cvtColor(stitched[-slice_h:], cv2.COLOR_BGR2GRAY)
             gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-            # Template matching
             res = cv2.matchTemplate(gray_img, template, cv2.TM_CCOEFF_NORMED)
             _, _, _, max_loc = cv2.minMaxLoc(res)
             y_offset = max_loc[1] + template.shape[0]
 
-            # Crop overlapping part
-            img_cropped = img[y_offset:]
+            img_cropped = img[y_offset:] if y_offset < img.shape[0] else img
             stitched = cv2.vconcat([stitched, img_cropped])
 
         return stitched
 
-    def deskew_image(cv_img):
-        """
-        Deskew image using OpenCV
-        """
-        gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
-        gray = cv2.bitwise_not(gray)
-        thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+    @staticmethod
+    def deskew_image(cv_img, max_correction_deg: float = 12.0):
+        """Deskew but clamp extreme angles to avoid accidental 90° flips."""
+        gray = cv_img if cv_img.ndim == 2 else cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
+        gray_inv = cv2.bitwise_not(gray)
+        thresh = cv2.threshold(gray_inv, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
 
         coords = np.column_stack(np.where(thresh > 0))
-        angle = cv2.minAreaRect(coords)[-1]
+        if coords.size == 0:
+            return cv_img  # nothing to compute, return as-is
 
-        if angle < -45:
-            angle = -(90 + angle)
-        else:
-            angle = -angle
+        angle = cv2.minAreaRect(coords)[-1]
+        angle = -(90 + angle) if angle < -45 else -angle
+
+        if abs(angle) > max_correction_deg:
+            angle = 0.0  # too big, likely wrong; don't rotate
 
         (h, w) = cv_img.shape[:2]
         M = cv2.getRotationMatrix2D((w // 2, h // 2), angle, 1.0)
-        rotated = cv2.warpAffine(cv_img, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
-        return rotated
+        return cv2.warpAffine(cv_img, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
 
+    @staticmethod
     def preprocess_for_ocr(cv_img):
-        """
-        Preprocess for OCR: grayscale, denoise, threshold, autocontrast
-        """
         gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
-        denoised = cv2.GaussianBlur(gray, (3,3), 0)
+        denoised = cv2.GaussianBlur(gray, (3, 3), 0)
         thresh = cv2.adaptiveThreshold(
             denoised, 255,
-            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY,
-            11, 2
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
         )
         pil_img = Image.fromarray(thresh)
-        pil_img = ImageOps.autocontrast(pil_img, cutoff=2)
-        return pil_img
+        return ImageOps.autocontrast(pil_img, cutoff=2)
 
 
 class ImagePreprocessorPillow:
