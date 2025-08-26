@@ -37,9 +37,15 @@ MAX_RECEIPTS_PER_USER = 100
 # Database Configuration
 DB_USER = os.environ.get('DB_USER')
 DB_PASSWORD = os.environ.get('DB_PASSWORD')
-DB_NAME = os.environ.get('DB_NAME')
 DB_PORT = os.environ.get('DB_PORT', 5432)
 DB_HOST = os.environ.get('DB_HOST')
+
+STAGE = os.environ.get('STAGE')
+
+DATABASE_NAMES = {
+    'dev': 'receipt_scanner_dev',
+    'prod': 'receipt_scanner_prod'
+}
 
 # AWS Clients (singleton pattern)
 _bedrock_client = None
@@ -54,7 +60,7 @@ def get_database_connection_info():
     return {
         'host': DB_HOST,
         'port': DB_PORT,
-        'database': DB_NAME,
+        'database': DATABASE_NAMES[STAGE],
         'user': DB_USER,
         'password': DB_PASSWORD
     }
