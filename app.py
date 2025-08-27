@@ -38,7 +38,7 @@ def main():
 
     # Create CDK environment
     cdk_env = cdk.Environment(
-        account=os.getenv("AWS_ACCOUNT_ID") or app.node.try_get_context("account"),
+        account=app.node.try_get_context("account"),
         region=os.getenv("AWS_REGION", "eu-west-1")
     )
 
