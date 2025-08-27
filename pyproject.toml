@@ -6,14 +6,14 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     # Lambda runtime dependencies
-    pyTelegramBotAPI==4.28.0
-    google-cloud-vision==3.4.0
-    Pillow==11.3.0
-    openai==1.52.0
-    pydantic==2.11.7
-    psycopg[binary]==3.2.9
-    python-dateutil
-    opencv-python-headless
+    "pyTelegramBotAPI==4.28.0",
+    "google-cloud-vision==3.4.0",
+    "Pillow==11.3.0",
+    "openai==1.52.0",
+    "pydantic==2.11.7",
+    "psycopg[binary]==3.2.9",
+    "python-dateutil",
+    "opencv-python-headless"
 ]
 
 [project.optional-dependencies]
@@ -26,4 +26,3 @@ cdk = [
 
 [tool.ty.rules]
 unresolved-import = "ignore"
-

@@ -82,9 +82,13 @@ class PostgreSQLStorageProvider(DocumentStorage):
                     """,
                         [
                             (
-                                str(uuid.uuid4()), receipt_id, item.get("name"), item.get("price"),
-                                item.get("quantity"), item.get("category"),
-                                item.get("subcategory"), item.get("discount"),
+                                str(uuid.uuid4()),
+                                receipt_id, item.get("name"),
+                                item.get("price"),
+                                item.get("quantity"),
+                                item.get("category"),
+                                item.get("subcategory"),
+                                item.get("discount"),
                             )
                             for item in items
                         ],
