@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Optional, List, Dict, Any
 import telebot
-from config import BOT_TOKEN, MAX_MESSAGE_LENGTH, setup_logging
+from config import TELEGRAM_BOT_TOKEN, MAX_MESSAGE_LENGTH, setup_logging
 
 
 setup_logging()
@@ -16,11 +16,11 @@ class TelegramService:
     """Telegram service using pyTelegramBotAPI"""
 
     def __init__(self):
-        if not BOT_TOKEN or BOT_TOKEN == "placeholder_token_for_bootstrap":
+        if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == "placeholder_token_for_bootstrap":
             logger.error("Invalid bot token")
             raise ValueError("Bot token is required")
 
-        self.bot = telebot.TeleBot(BOT_TOKEN)
+        self.bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
         # Configure timeouts for Lambda environment
         telebot.apihelper.CONNECT_TIMEOUT = 30
         telebot.apihelper.READ_TIMEOUT = 30

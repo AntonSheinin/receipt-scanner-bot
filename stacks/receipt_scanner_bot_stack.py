@@ -32,6 +32,7 @@ from aws_cdk import (
     aws_sqs as sqs,
     aws_cloudwatch as cloudwatch,
     custom_resources as cr,
+    aws_secretsmanager as secretsmanager
 )
 
 
@@ -44,16 +45,14 @@ class ReceiptScannerBotStack(Stack):
         self.stage = stage
         self.is_production = stage == "prod"
 
+        app_secret = secretsmanager.Secret.from_secret_name_v2(
+            self, "AppSecret",
+            secret_name=f"receipt-scanner-bot-{self.stage}"
+        )
+
+        bot_token = app_secret.secret_value_from_json("TELEGRAM_BOT_TOKEN").unsafe_unwrap()
+
         print(f"🏗️  Building {construct_id} for stage: {stage}")
-
-        # Get bot token
-        bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
-
-        if not bot_token:
-            bot_token = "placeholder_token_for_bootstrap"
-            print("⚠️ No bot token found. Set TELEGRAM_BOT_TOKEN in .env file")
-        else:
-            print("✅ Bot token loaded successfully")
 
         # Create single log group for all components
         main_log_group = self._create_main_log_group()
@@ -68,8 +67,8 @@ class ReceiptScannerBotStack(Stack):
         receipt_bucket = self._create_s3_bucket()
         processing_queue, dlq = self._create_processing_queue()
 
-        producer_role = self._create_producer_lambda_role(processing_queue)
-        consumer_role = self._create_consumer_lambda_role(receipt_bucket, database, processing_queue)
+        producer_role = self._create_producer_lambda_role(processing_queue, app_secret)
+        consumer_role = self._create_consumer_lambda_role(receipt_bucket, database, processing_queue, app_secret)
 
         producer_lambda = self._create_producer_lambda(producer_role, bot_token, processing_queue, main_log_group)
         consumer_lambda = self._create_consumer_lambda(consumer_role, processing_queue, receipt_bucket, main_log_group, database)
@@ -77,9 +76,9 @@ class ReceiptScannerBotStack(Stack):
         api_gateway = self._create_api_gateway(producer_lambda, main_log_group)
 
         # Setup webhook if bot token is valid
-        if bot_token != "placeholder_token_for_bootstrap":
+        if bot_token:
             webhook_url = f"{api_gateway.api_endpoint}/webhook"
-            self._create_webhook_setup(bot_token, webhook_url, api_gateway, main_log_group)
+            self._create_webhook_setup(bot_token, webhook_url, api_gateway, main_log_group, app_secret)
 
         self._create_monitoring(processing_queue, dlq, producer_lambda, consumer_lambda)
 
@@ -134,7 +133,7 @@ class ReceiptScannerBotStack(Stack):
 
         return bucket
 
-    def _create_producer_lambda_role(self, queue: sqs.Queue) -> iam.Role:
+    def _create_producer_lambda_role(self, queue: sqs.Queue, secret: secretsmanager.Secret) -> iam.Role:
         """Create IAM role for Producer Lambda"""
         role = iam.Role(
             self, "ReceiptBotProducerLambdaRole",
@@ -148,13 +147,15 @@ class ReceiptScannerBotStack(Stack):
         # Only SQS permissions for producer
         queue.grant_send_messages(role)
 
+        secret.grant_read(role)
+
         # Add resource-specific tags
         Tags.of(role).add("ResourceType", "IAMRole")
         Tags.of(role).add("Component", "ProducerLambda")
 
         return role
 
-    def _create_consumer_lambda_role(self, bucket: s3.Bucket, database: rds.DatabaseInstance, queue: sqs.Queue) -> iam.Role:
+    def _create_consumer_lambda_role(self, bucket: s3.Bucket, database: rds.DatabaseInstance, queue: sqs.Queue, secret: secretsmanager.Secret) -> iam.Role:
         """Create IAM role for Consumer Lambda"""
         role = iam.Role(
             self, "ReceiptBotConsumerLambdaRole",
@@ -185,6 +186,8 @@ class ReceiptScannerBotStack(Stack):
 
         bucket.grant_read_write(role)
         queue.grant_consume_messages(role)
+
+        secret.grant_read(role)
 
         # Add resource-specific tags
         Tags.of(role).add("ResourceType", "IAMRole")
@@ -242,10 +245,8 @@ class ReceiptScannerBotStack(Stack):
             memory_size=1536,
             environment={
                 "DB_USER": os.getenv('DB_USER'),
-                "DB_PASSWORD": os.getenv('DB_PASSWORD'),
                 "DB_PORT": os.getenv('DB_PORT'),
                 "DB_HOST": database.instance_endpoint.hostname,
-                "TELEGRAM_BOT_TOKEN": os.getenv('TELEGRAM_BOT_TOKEN'),
                 "S3_BUCKET_NAME": bucket.bucket_name,
                 "DOCUMENT_STORAGE_PROVIDER": os.getenv('DOCUMENT_STORAGE_PROVIDER'),
                 "BEDROCK_REGION": os.getenv('BEDROCK_REGION'),
@@ -254,8 +255,6 @@ class ReceiptScannerBotStack(Stack):
                 "LLM_PROVIDER": os.getenv('LLM_PROVIDER'),
                 "DOCUMENT_PROCESSING_MODE": os.getenv('DOCUMENT_PROCESSING_MODE'),
                 "OCR_PROCESSING_MODE": os.getenv('OCR_PROCESSING_MODE'),
-                "GOOGLE_CREDENTIALS_JSON": os.getenv('GOOGLE_CREDENTIALS_JSON'),
-                "OPENAI_API_KEY": os.getenv('OPENAI_API_KEY'),
                 "OPENAI_MODEL_ID": os.getenv('OPENAI_MODEL_ID'),
                 "STAGE": self.stage
             },
@@ -432,30 +431,9 @@ class ReceiptScannerBotStack(Stack):
 
         return api
 
-    def _create_webhook_setup(self, bot_token: str, webhook_url: str, api_gateway: apigwv2.HttpApi, log_group: logs.LogGroup) -> None:
+    def _create_webhook_setup(self, bot_token: str, webhook_url: str, api_gateway: apigwv2.HttpApi, log_group: logs.LogGroup, secret: secretsmanager.Secret) -> None:
         """Create webhook setup custom resource"""
 
-        # Create custom resource provider
-        webhook_provider = cr.Provider(
-            self, "WebhookSetterProvider",
-            on_event_handler=self._create_webhook_setter_lambda(log_group)
-        )
-
-        # Create custom resource
-        webhook_setup = CustomResource(
-            self, "WebhookSetterResource",
-            service_token=webhook_provider.service_token,
-            properties={
-                'WebhookUrl': webhook_url,
-                'BotToken': bot_token,
-                'Stage': self.stage
-            }
-        )
-
-        webhook_setup.node.add_dependency(api_gateway)
-
-    def _create_webhook_setter_lambda(self, log_group: logs.LogGroup) -> _lambda.Function:
-        """Create webhook setter Lambda using shared container image"""
         webhook_lambda = _lambda.Function(
             self, "WebhookSetterHandler",
             function_name=f"receipt-bot-{self.stage}-webhook-setter",
@@ -468,7 +446,6 @@ class ReceiptScannerBotStack(Stack):
             runtime=_lambda.Runtime.FROM_IMAGE,
             timeout=Duration.minutes(2),
             environment={
-                "TELEGRAM_BOT_TOKEN": os.getenv('TELEGRAM_BOT_TOKEN'),
                 "STAGE": self.stage
             },
             log_group=log_group
@@ -478,7 +455,26 @@ class ReceiptScannerBotStack(Stack):
         Tags.of(webhook_lambda).add("ResourceType", "LambdaFunction")
         Tags.of(webhook_lambda).add("Component", "WebhookSetter")
 
-        return webhook_lambda
+        secret.grant_read(webhook_lambda)
+
+        # Create custom resource provider
+        webhook_provider = cr.Provider(
+            self, "WebhookSetterProvider",
+            on_event_handler=webhook_lambda
+        )
+
+        # Create custom resource
+        webhook_setup = CustomResource(
+            self, "WebhookSetterResource",
+            service_token=webhook_provider.service_token,
+            properties={
+                'WebhookUrl': webhook_url,
+                'Stage': self.stage,
+                'BotToken': bot_token
+            }
+        )
+
+        webhook_setup.node.add_dependency(api_gateway)
 
     def _create_outputs(self, api_gateway: apigwv2.HttpApi, bucket: s3.Bucket,
                     database: rds.DatabaseInstance, queue: sqs.Queue, bot_token: str,
@@ -632,7 +628,6 @@ class ReceiptScannerBotStack(Stack):
                 "DB_HOST": database.instance_endpoint.hostname,
                 "DB_PORT": os.getenv('DB_PORT'),
                 "DB_USER": os.getenv('DB_USER'),
-                "DB_PASSWORD": os.getenv('DB_PASSWORD'),
                 "STAGE": self.stage
             },
             log_group=log_group,
@@ -661,5 +656,14 @@ class ReceiptScannerBotStack(Stack):
 
         # Ensure schema is created after database is ready
         schema_resource.node.add_dependency(database)
+
+    def _create_secrets(self) -> secretsmanager.Secret:
+        """Create empty secret for manual population"""
+        return secretsmanager.Secret(
+            self, "AppSecret",
+            secret_name=f"receipt-scanner-bot-{self.stage}",
+            description=f"Application secrets for {self.stage}"
+            # No initial value - AWS will create empty secret
+        )
 
 
