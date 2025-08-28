@@ -12,7 +12,6 @@ import aws_cdk.aws_rds as rds
 import aws_cdk.aws_ec2 as ec2
 import aws_cdk.aws_ecr_assets as ecr_assets
 from aws_cdk.aws_lambda import IFunction
-import aws_cdk.aws_lambda_python_alpha as _lambda_python
 
 from constructs import Construct
 from aws_cdk import (

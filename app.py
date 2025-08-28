@@ -6,6 +6,7 @@
 """
 
 import os
+import boto3
 from dotenv import load_dotenv
 import aws_cdk as cdk
 from stacks.receipt_scanner_bot_stack import ReceiptScannerBotStack
@@ -38,7 +39,7 @@ def main():
 
     # Create CDK environment
     cdk_env = cdk.Environment(
-        account=app.node.try_get_context("account"),
+        account=app.node.try_get_context("account") or boto3.client('sts').get_caller_identity()['Account'],
         region=os.getenv("AWS_REGION", "eu-west-1")
     )
 
