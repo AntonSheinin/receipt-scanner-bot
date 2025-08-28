@@ -591,7 +591,7 @@ class ReceiptScannerBotStack(Stack):
             security_groups=[db_security_group],
             credentials=rds.Credentials.from_username(
                 username=os.getenv('DB_USER'),
-                password=SecretValue.unsafe_plain_text(os.getenv('DB_PASSWORD'))
+                password=SecretValue.unsafe_plain_text('DB_PASSWORD')
             ),
             allocated_storage=20,
             backup_retention=Duration.days(7) if self.is_production else Duration.days(1),
