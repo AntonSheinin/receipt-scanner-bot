@@ -23,6 +23,7 @@ def lambda_handler(event, context):
         try:
             setup_databases()
             send_response(event, context, "SUCCESS", {"Message": "Databases and schemas created"})
+
         except Exception as e:
             logger.error(f"Setup failed: {e}")
             send_response(event, context, "FAILED", {"Error": str(e)})
@@ -38,7 +39,9 @@ def setup_databases():
     db_host = os.getenv('DB_HOST')
     db_user = os.getenv('DB_USER')
     db_password = os.getenv('DB_PASSWORD')
-    db_port = int(os.getenv('DB_PORT', 5432))
+    db_port = 5432
+    stage = os.getenv("STAGE")
+    db_name = f"receipt_scanner_{stage}"
 
     logger.info(f"Setting up databases on {db_host}")
 
@@ -47,18 +50,15 @@ def setup_databases():
 
     with psycopg.connect(conn_string, autocommit=True) as conn:
         with conn.cursor() as cursor:
-            # Create both databases
-            for db_name in ['receipt_scanner_dev', 'receipt_scanner_prod']:
-                cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,))
-                if not cursor.fetchone():
-                    cursor.execute(f"CREATE DATABASE {db_name}")
-                    logger.info(f"Created database: {db_name}")
-                else:
-                    logger.info(f"Database exists: {db_name}")
+            cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (db_name,))
+            if not cursor.fetchone():
+                cursor.execute(f"CREATE DATABASE {db_name}")
+                logger.info(f"Created database: {db_name}")
 
-    # Create schemas in both databases
-    for db_name in ['receipt_scanner_dev', 'receipt_scanner_prod']:
-        create_schema(db_host, db_port, db_name, db_user, db_password)
+            else:
+                logger.info(f"Database exists: {db_name}")
+
+    create_schema(db_host, db_port, db_name, db_user, db_password)
 
 
 def create_schema(host, port, database, user, password):
