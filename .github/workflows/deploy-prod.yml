@@ -6,6 +6,9 @@ on:
       - master
   workflow_dispatch:
 
+env:
+  AWS-REGION: eu-west-1
+
 permissions:
   id-token: write
   contents: read
