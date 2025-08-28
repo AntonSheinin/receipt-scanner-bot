@@ -5,9 +5,7 @@
     Receipt Scanner Bot MVP - CDK App Entry Point
 """
 
-import os
 import boto3
-from dotenv import load_dotenv
 import aws_cdk as cdk
 from stacks.receipt_scanner_bot_stack import ReceiptScannerBotStack
 
@@ -28,19 +26,10 @@ def main():
     if stage not in ("dev", "prod"):
         raise ValueError(f"Invalid stage '{stage}'. Must be 'dev' or 'prod'")
 
-    # Load environment-specific configuration
-    env_file = f".env.{stage}"
-    if os.path.exists(env_file):
-        load_dotenv(env_file)
-        print(f"✅ Loaded configuration from: {env_file}")
-
-    else:
-        print(f"⚠️  Environment file {env_file} not found. Using system environment variables.")
-
     # Create CDK environment
     cdk_env = cdk.Environment(
         account=app.node.try_get_context("account") or boto3.client('sts').get_caller_identity()['Account'],
-        region=os.getenv("AWS_REGION", "eu-west-1")
+        region="eu-west-1"
     )
 
     # Stage-specific stack naming

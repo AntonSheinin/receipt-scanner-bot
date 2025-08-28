@@ -59,7 +59,7 @@ class ReceiptScannerBotStack(Stack):
         self.lambda_image = self._create_lambda_image()
 
         # Create database infrastructure
-        database = self._create_database_infrastructure()
+        database = self._create_database_infrastructure(app_secret)
         self._create_database_setup(database, main_log_group)
 
         # Create resources
@@ -211,7 +211,6 @@ class ReceiptScannerBotStack(Stack):
             timeout=Duration.seconds(30),
             memory_size=256,
             environment={
-                "TELEGRAM_BOT_TOKEN": bot_token,
                 "SQS_QUEUE_URL": queue.queue_url,
                 "STAGE": self.stage
             },
@@ -243,18 +242,8 @@ class ReceiptScannerBotStack(Stack):
             timeout=Duration.minutes(10),
             memory_size=1536,
             environment={
-                "DB_USER": os.getenv('DB_USER'),
-                "DB_PORT": os.getenv('DB_PORT'),
                 "DB_HOST": database.instance_endpoint.hostname,
                 "S3_BUCKET_NAME": bucket.bucket_name,
-                "DOCUMENT_STORAGE_PROVIDER": os.getenv('DOCUMENT_STORAGE_PROVIDER'),
-                "BEDROCK_REGION": os.getenv('BEDROCK_REGION'),
-                "BEDROCK_MODEL_ID": os.getenv('BEDROCK_MODEL_ID'),
-                "OCR_PROVIDER": os.getenv('OCR_PROVIDER'),
-                "LLM_PROVIDER": os.getenv('LLM_PROVIDER'),
-                "DOCUMENT_PROCESSING_MODE": os.getenv('DOCUMENT_PROCESSING_MODE'),
-                "OCR_PROCESSING_MODE": os.getenv('OCR_PROCESSING_MODE'),
-                "OPENAI_MODEL_ID": os.getenv('OPENAI_MODEL_ID'),
                 "STAGE": self.stage
             },
             log_group=log_group,
@@ -552,7 +541,7 @@ class ReceiptScannerBotStack(Stack):
                 export_name=f"ReceiptBot-{self.stage.capitalize()}-WebhookStatus"
             )
 
-    def _create_database_infrastructure(self) -> rds.DatabaseInstance:
+    def _create_database_infrastructure(self, app_secret) -> rds.DatabaseInstance:
         """Create publicly accessible RDS PostgreSQL instance with defaults"""
 
         default_vpc = ec2.Vpc.from_lookup(self, "DefaultVpc", is_default=True)
@@ -590,8 +579,8 @@ class ReceiptScannerBotStack(Stack):
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
             security_groups=[db_security_group],
             credentials=rds.Credentials.from_username(
-                username=os.getenv('DB_USER'),
-                password=SecretValue.unsafe_plain_text('DB_PASSWORD')
+                username=app_secret.secret_value_from_json("DB_USER").unsafe_unwrap(),
+                password=app_secret.secret_value_from_json("DB_PASSWORD")
             ),
             allocated_storage=20,
             backup_retention=Duration.days(7) if self.is_production else Duration.days(1),
@@ -625,8 +614,8 @@ class ReceiptScannerBotStack(Stack):
             memory_size=256,
             environment={
                 "DB_HOST": database.instance_endpoint.hostname,
-                "DB_PORT": os.getenv('DB_PORT'),
-                "DB_USER": os.getenv('DB_USER'),
+                "DB_USER": SecretValue.unsafe_plain_text('DB_USER').unsafe_unwrap(),
+                "DB_PASSWORD": SecretValue.unsafe_plain_text('DB_PASSWORD').unsafe_unwrap(),
                 "STAGE": self.stage
             },
             log_group=log_group,
