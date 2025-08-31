@@ -26,7 +26,7 @@ class ReceiptService:
         self.storage = StorageService()
         self.processor = DocumentProcessorService()
 
-    def process_receipt(self, message: Dict, chat_id: int) -> Dict:
+    def process_receipt(self, message: Dict, chat_id: int, is_store_raw_photo: bool = False) -> Dict:
         """Process receipt photo end-to-end with limit checking"""
 
         self.telegram.send_typing(chat_id)
@@ -41,11 +41,12 @@ class ReceiptService:
         receipt_id = str(uuid.uuid4())
 
         # Store raw image
-        logger.info(f"Storing receipt image with ID: {receipt_id} for user: {chat_id}")
-        self.telegram.send_message(chat_id, "📁 שומר את התמונה...")
-        image_url = self.storage.store_raw_image(receipt_id, photo_data)
-        if not image_url:
-            return self.telegram.send_error(chat_id, "שגיאה בשמירת התמונה. נא לנסות שוב.")
+        if is_store_raw_photo:
+            logger.info(f"Storing receipt image with ID: {receipt_id} for user: {chat_id}")
+            self.telegram.send_message(chat_id, "📁 שומר את התמונה...")
+            image_url = self.storage.store_raw_image(receipt_id, photo_data)
+            if not image_url:
+                return self.telegram.send_error(chat_id, "שגיאה בשמירת התמונה. נא לנסות שוב.")
 
         # Analyze receipt using hybrid processor
         logger.info(f"Analyzing receipt with ID: {receipt_id}")
@@ -68,6 +69,14 @@ class ReceiptService:
             self.telegram.send_message(chat_id, response_text, parse_mode=None)
 
             return create_response(200, {"status": "success"})
+
+        except ValueError as e:
+            if str(e) == "DUPLICATE_RECEIPT":
+                self.telegram.send_message(chat_id, "🔍 קבלה זהה כבר קיימת במערכת")
+                return create_response(200, {"status": "duplicate"})
+            else:
+                logger.error(f"Receipt validation error: {e}")
+                return self.telegram.send_error(chat_id, "❌ שגיאה בנתוני הקבלה")
 
         except Exception as e:
             logger.error(f"Receipt processing error: {e}", exc_info=True)

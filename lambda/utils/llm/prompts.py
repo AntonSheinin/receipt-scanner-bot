@@ -113,6 +113,7 @@ CRITICAL DATE PARSING RULES:
 - ALWAYS output date in YYYY-MM-DD format
 - If date is ambiguous, use context clues (receipt freshness, other dates on receipt)
 - If unable to determine year definitively, assume current decade (202X)
+- if the recognized year is 2023, that is probably recognition error - change it to 2025
 - carefully check that the final date is valid and correctly formatted
 
 CRITICAL ITEM PARSING RULES:
@@ -233,6 +234,7 @@ CRITICAL DATE PARSING RULES:
 - ALWAYS output date in YYYY-MM-DD format
 - If date is ambiguous, use context clues (receipt freshness, other dates on receipt)
 - If unable to determine year definitively, assume current decade (202X)
+- if the recognized year is 2023, that is probably recognition error - change it to 2025
 
 CRITICAL ITEM PARSING RULE:
 - Lines starting with a number (product code/barcode) mark the START of a new item

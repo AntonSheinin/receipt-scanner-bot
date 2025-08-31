@@ -11,20 +11,21 @@ from functools import lru_cache
 
 # ---------- App Configuration -----------------------
 AWS_REGION = 'eu-west-1'
+
+# LLM Configuration
+LLM_PROVIDER = 'bedrock'  # Options: bedrock, openai
 BEDROCK_MODEL_ID = 'eu.anthropic.claude-3-7-sonnet-20250219-v1:0' # eu.anthropic.claude-sonnet-4-20250514-v1:0
 BEDROCK_REGION = 'eu-west-1'
-LLM_PROVIDER = 'bedrock'  # Options: bedrock, openai
-DOCUMENT_STORAGE_PROVIDER = 'postgresql'  # Options: postgresql
+OPENAI_MODEL_ID = 'gpt-5-nano-2025-08-07' # gpt-5-chat-latest, gpt-4.1-2025-04-14, gpt-5-nano-2025-08-07
 
 # OCR Configuration
 OCR_PROVIDER = 'google_vision' # Options: aws_textract, google_vision
 OCR_PROCESSING_MODE = 'structured_text'  # Options: raw_text, structured_text
-OPENAI_MODEL_ID = 'gpt-5-nano-2025-08-07' # gpt-5-chat-latest, gpt-4.1-2025-04-14, gpt-5-nano-2025-08-07
 
 # Document Processing Mode
 DOCUMENT_PROCESSING_MODE = 'ocr_llm'  # Options: llm, ocr_llm, pp_ocr_llm
+DOCUMENT_STORAGE_PROVIDER = 'postgresql'  # Options: postgresql
 # ------------------------------------------------------
-
 
 # Limits
 MAX_MESSAGE_LENGTH = 4000
@@ -38,11 +39,6 @@ S3_BUCKET_NAME = os.environ.get('S3_BUCKET_NAME', '')
 SQS_QUEUE_URL = os.environ.get('SQS_QUEUE_URL', '')
 STAGE = os.environ.get('STAGE')
 # ------------------------------------------------------------------------------
-
-DATABASE_NAMES = {
-    'dev': 'receipt_scanner_dev',
-    'prod': 'receipt_scanner_prod'
-}
 
 # AWS Clients (singleton pattern)
 _bedrock_client = None
@@ -78,7 +74,7 @@ def get_database_connection_info() -> dict:
     return {
         'host': DB_HOST,
         'port': 5432,
-        'database': DATABASE_NAMES[STAGE],
+        'database': f'receipt_scanner_{STAGE}',
         'user': DB_USER,
         'password': DB_PASSWORD
     }

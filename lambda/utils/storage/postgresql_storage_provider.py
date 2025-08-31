@@ -6,6 +6,7 @@ import logging
 import uuid
 from typing import Any, Literal
 import psycopg
+from psycopg import errors
 from psycopg.rows import dict_row
 from provider_interfaces import DocumentStorage
 from config import setup_logging, get_database_connection_info
@@ -67,9 +68,13 @@ class PostgreSQLStorageProvider(DocumentStorage):
                             receipt_number = EXCLUDED.receipt_number,
                             image_url = EXCLUDED.image_url
                     """, (
-                        receipt_id, user_id, receipt_data.get('store_name'),
-                        receipt_data.get('purchasing_date'), receipt_data.get('total'),
-                        receipt_data.get('payment_method'), receipt_data.get('receipt_number'),
+                        receipt_id,
+                        user_id,
+                        receipt_data.get('store_name'),
+                        receipt_data.get('purchasing_date'),
+                        receipt_data.get('total'),
+                        receipt_data.get('payment_method'),
+                        receipt_data.get('receipt_number'),
                         receipt_data.get('image_url')
                     ))
 
@@ -95,6 +100,15 @@ class PostgreSQLStorageProvider(DocumentStorage):
                     )
 
                     return True
+
+        except errors.UniqueViolation as e:
+            # Check if it's our duplicate constraint
+            constraint_name = getattr(e.diag, 'constraint_name', '')
+            if constraint_name == 'unique_receipt_no_duplicates':
+                logger.warning(f"Duplicate receipt blocked for user {user_id}")
+                raise ValueError("DUPLICATE_RECEIPT")
+            else:
+                raise  # Re-raise other unique violations
 
         except Exception as e:
             logger.error(f"Save receipt error: {e}")

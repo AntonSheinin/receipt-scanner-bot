@@ -85,6 +85,12 @@ class StorageService:
         try:
             return self.document_storage.save_receipt_with_items(user_id, receipt_dict)
 
+        except ValueError as e:
+            if str(e) == "DUPLICATE_RECEIPT":
+                raise  # Re-raise to be handled by caller
+            logger.error(f"Receipt storage validation error: {e}")
+            return False
+
         except Exception as e:
             logger.error(f"Receipt storage error: {e}")
             return False

@@ -80,7 +80,10 @@ def create_schema(host, port, database, user, password):
                     payment_method VARCHAR(20),
                     receipt_number VARCHAR(50),
                     image_url TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+                    CONSTRAINT unique_receipt_no_duplicates
+                    UNIQUE (receipt_number, purchasing_date, total)
                 );
 
                 CREATE TABLE IF NOT EXISTS receipt_items (
