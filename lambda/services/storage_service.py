@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from config import setup_logging
-from provider_factory import ProviderFactory
+from providers.provider_factory import ProviderFactory
 from receipt_schemas import ReceiptData
 
 

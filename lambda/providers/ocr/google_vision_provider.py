@@ -10,10 +10,10 @@ from google.cloud import vision
 from typing import List, Dict, Any
 from decimal import Decimal
 from config import setup_logging, GOOGLE_CREDENTIALS_JSON
-from utils.helpers import normalize_date
-from provider_interfaces import OCRProvider, OCRResponse
+from providers.helpers import normalize_date
+from providers.provider_interfaces import OCRProvider, OCRResponse
 from receipt_schemas import ReceiptItem
-from utils.category_manager import category_manager
+from providers.category_manager import category_manager
 from google.oauth2 import service_account
 
 

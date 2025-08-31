@@ -12,8 +12,8 @@ from services.query_service import QueryService
 from services.telegram_service import TelegramService
 from services.storage_service import StorageService
 from config import MAX_RECEIPTS_PER_USER, setup_logging
-from utils.helpers import get_secure_user_id
-from utils.image_preprocessor.pillow_preprocessor import ImageStitchingAndPreprocessing
+from providers.helpers import get_secure_user_id
+from providers.image_preprocessor.pillow_preprocessor import ImageStitchingAndPreprocessing
 
 
 setup_logging()

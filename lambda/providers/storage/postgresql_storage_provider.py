@@ -8,7 +8,7 @@ from typing import Any, Literal
 import psycopg
 from psycopg import errors
 from psycopg.rows import dict_row
-from provider_interfaces import DocumentStorage
+from providers.provider_interfaces import DocumentStorage
 from config import setup_logging, get_database_connection_info
 import json
 

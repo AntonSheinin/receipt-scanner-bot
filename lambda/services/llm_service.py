@@ -7,9 +7,9 @@ from typing import Dict, Optional
 import logging
 import json
 from config import setup_logging
-from provider_factory import ProviderFactory
-from provider_interfaces import LLMResponse
-from utils.llm.prompts import PromptManager
+from providers.provider_factory import ProviderFactory
+from providers.provider_interfaces import LLMResponse
+from providers.llm.prompts import PromptManager
 from receipt_schemas import ReceiptAnalysisResult
 from pydantic import ValidationError
 

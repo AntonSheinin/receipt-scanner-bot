@@ -7,7 +7,7 @@ from typing import Dict
 import json
 import logging
 from config import setup_logging
-from utils.category_manager import category_manager
+from providers.category_manager import category_manager
 
 
 setup_logging()

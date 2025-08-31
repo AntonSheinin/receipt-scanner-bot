@@ -6,7 +6,7 @@ from typing import Optional, List, Dict, Any
 import base64
 import logging
 from openai import OpenAI
-from provider_interfaces import LLMProvider, LLMResponse
+from providers.provider_interfaces import LLMProvider, LLMResponse
 from config import setup_logging, OPENAI_API_KEY, OPENAI_MODEL_ID
 import os
 

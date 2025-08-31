@@ -6,11 +6,11 @@ import boto3
 import logging
 from decimal import Decimal, InvalidOperation
 from typing import Optional, List, Dict, Any
-from utils.helpers import normalize_date
+from providers.helpers import normalize_date
 from botocore.exceptions import ClientError
 from config import setup_logging, AWS_REGION
-from utils.category_manager import category_manager
-from provider_interfaces import OCRProvider, OCRResponse
+from providers.category_manager import category_manager
+from providers.provider_interfaces import OCRProvider, OCRResponse
 from receipt_schemas import ReceiptItem
 
 

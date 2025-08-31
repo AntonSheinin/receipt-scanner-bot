@@ -9,8 +9,8 @@ from config import LLM_PROVIDER, setup_logging
 from services.telegram_service import TelegramService
 from services.storage_service import StorageService
 from services.llm_service import LLMService
-from utils.helpers import create_response, get_secure_user_id
-from utils.llm.prompts import PromptManager
+from providers.helpers import create_response, get_secure_user_id
+from providers.llm.prompts import PromptManager
 
 
 setup_logging()

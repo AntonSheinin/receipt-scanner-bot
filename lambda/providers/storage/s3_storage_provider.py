@@ -6,7 +6,7 @@ import boto3
 import logging
 from typing import Optional, Dict
 from datetime import datetime, timezone
-from provider_interfaces import ImageStorage
+from providers.provider_interfaces import ImageStorage
 from config import get_s3_client, S3_BUCKET_NAME, setup_logging
 
 

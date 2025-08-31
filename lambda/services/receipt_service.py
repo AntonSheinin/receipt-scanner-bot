@@ -8,11 +8,11 @@ from typing import Dict
 from services.telegram_service import TelegramService
 from services.storage_service import StorageService
 from services.document_processor_service import DocumentProcessorService
-from utils.helpers import create_response
+from providers.helpers import create_response
 from config import MAX_ITEMS_DISPLAY, MAX_ITEM_NAME_LENGTH, setup_logging, MAX_RECEIPTS_PER_USER
-from utils.helpers import get_secure_user_id
+from providers.helpers import get_secure_user_id
 from receipt_schemas import ReceiptAnalysisResult
-from utils.category_manager import category_manager
+from providers.category_manager import category_manager
 
 
 setup_logging()

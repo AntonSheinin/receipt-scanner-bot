@@ -5,7 +5,7 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List, Literal, Dict, Any
 from decimal import Decimal, InvalidOperation
-from utils.category_manager import category_manager
+from providers.category_manager import category_manager
 from datetime import datetime, timedelta, timezone, date
 from dateutil import parser as date_parser
 import re

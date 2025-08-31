@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional
 from config import setup_logging
 from services.telegram_service import TelegramService
 from services.message_queue_service import MessageQueueService
-from utils.helpers import create_response
+from providers.helpers import create_response
 
 
 setup_logging()

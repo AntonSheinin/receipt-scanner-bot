@@ -111,9 +111,9 @@ cdk deploy --context stage=prod
 ## Environment Variables
 Secrets are managed via AWS Secrets Manager with the following keys:
 - `TELEGRAM_BOT_TOKEN`
-- `DB_USER` / `DB_PASSWORD`
+- `DB_USER`
+- `DB_PASSWORD`
 - `OPENAI_API_KEY`
 - `GOOGLE_CREDENTIALS_JSON`
 - `USER_ID_SALT`
-
 

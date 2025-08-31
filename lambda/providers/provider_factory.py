@@ -3,13 +3,13 @@
 """
 
 from typing import Dict, Type
-from provider_interfaces import LLMProvider, OCRProvider, ImageStorage, DocumentStorage
-from utils.llm.bedrock_provider import BedrockProvider
-from utils.llm.openai_provider import OpenAIProvider
-from utils.ocr.aws_textract_provider import TextractProvider
-from utils.ocr.google_vision_provider import GoogleVisionProvider
-from utils.storage.s3_storage_provider import S3StorageProvider
-from utils.storage.postgresql_storage_provider import PostgreSQLStorageProvider
+from providers.provider_interfaces import LLMProvider, OCRProvider, ImageStorage, DocumentStorage
+from providers.llm.bedrock_provider import BedrockProvider
+from providers.llm.openai_provider import OpenAIProvider
+from providers.ocr.aws_textract_provider import TextractProvider
+from providers.ocr.google_vision_provider import GoogleVisionProvider
+from providers.storage.s3_storage_provider import S3StorageProvider
+from providers.storage.postgresql_storage_provider import PostgreSQLStorageProvider
 
 
 class ProviderFactory:
