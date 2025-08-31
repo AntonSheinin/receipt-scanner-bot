@@ -39,6 +39,7 @@ class ReceiptService:
             return self.telegram.send_error(chat_id, "העלאת התמונה נכשלה. נא לנסות שוב.")
 
         receipt_id = str(uuid.uuid4())
+        image_url: str | None = None
 
         # Store raw image
         if is_store_raw_photo:
@@ -72,7 +73,7 @@ class ReceiptService:
 
         except ValueError as e:
             if str(e) == "DUPLICATE_RECEIPT":
-                self.telegram.send_message(chat_id, "🔍 קבלה זהה כבר קיימת במערכת")
+                self.telegram.send_message(chat_id, "❌ קבלה זהה כבר קיימת במערכת")
                 return create_response(200, {"status": "duplicate"})
             else:
                 logger.error(f"Receipt validation error: {e}")

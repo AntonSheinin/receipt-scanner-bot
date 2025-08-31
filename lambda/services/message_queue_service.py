@@ -22,12 +22,17 @@ class MessageQueueService:
 
     def _get_message_type(self, telegram_message: Dict[str, Any]) -> MessageType:
         """Extract message type from Telegram message"""
+
         if "photo" in telegram_message:
             return MessageType.PHOTO.value
+
         if "text" in telegram_message:
+            text = telegram_message.get("text", "").strip()
+            if text.startswith("/"):
+                return MessageType.COMMAND.value
+
             return MessageType.TEXT_QUERY.value
-        if "command" in telegram_message:
-            return MessageType.COMMAND.value
+
         return MessageType.UNKNOWN.value
 
     def queue_telegram_message(self, telegram_message: Dict[str, Any]) -> bool:
