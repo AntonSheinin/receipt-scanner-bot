@@ -1,6 +1,6 @@
 [project]
 name = "receipt-scanner-bot"
-version = "0.6.0"
+version = "0.7.0"
 description = "Telegram bot for scanning and analyzing receipts"
 readme = "README.md"
 requires-python = ">=3.12"

@@ -10,7 +10,7 @@ from pathlib import Path
 class CategoryManager:
     """Manager for category operations using categories.json"""
 
-    def __init__(self, taxonomy_file_path: str = "utils/categories.json"):
+    def __init__(self, taxonomy_file_path: str = "providers/categories.json"):
         self.taxonomy_file_path = taxonomy_file_path
         self.taxonomy = self._load_taxonomy()
         self._flat_subcategories = self._build_flat_subcategories()

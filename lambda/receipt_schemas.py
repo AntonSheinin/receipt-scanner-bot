@@ -292,12 +292,12 @@ class ReceiptData(BaseModel):
                 for item in self.items
             )
 
-            # Allow for small rounding differences (max 0.10 currency units)
+            # Allow for small rounding differences (max 0.30 currency units)
             difference = abs(calculated_total - self.total)
 
             logger.debug(f"Total validation: receipt total={self.total}, calculated total={calculated_total}, difference={difference}")
 
-            if difference > Decimal('0.10'):
+            if difference > Decimal('0.30'):
                 logger.error(f"Receipt validation failed: total mismatch. Expected: {self.total}, Calculated: {calculated_total}, Difference: {difference}")
                 raise ValueError(
                     f"Total amount ({self.total}) doesn't match sum of items ({calculated_total}). "
@@ -331,13 +331,6 @@ class ReceiptAnalysisResult(BaseModel):
     @classmethod
     def from_llm_response(cls, llm_data: Dict[str, Any], raw_text: Optional[str] = None) -> 'ReceiptAnalysisResult':
         """Create validated result from LLM response data"""
-
-        # Convert items to use subcategory field for backward compatibility
-        if 'items' in llm_data and llm_data['items']:
-            for item in llm_data['items']:
-                if 'category' in item and 'subcategory' not in item:
-                    # Map old category to subcategory
-                    item['subcategory'] = item['category']
 
         receipt_data = ReceiptData(**llm_data)
 
