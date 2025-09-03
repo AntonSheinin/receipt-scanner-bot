@@ -3,11 +3,10 @@
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
+from typing import Optional
 from enum import Enum
 import logging
 from config import OCR_PROCESSING_MODE, DOCUMENT_PROCESSING_MODE, OCR_PROVIDER, LLM_PROVIDER, setup_logging
-from services.storage_service import StorageService
 from services.llm_service import LLMService
 from providers.provider_factory import ProviderFactory
 from providers.image_preprocessor.pillow_preprocessor import ImagePreprocessorPillow

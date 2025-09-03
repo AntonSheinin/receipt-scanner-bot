@@ -38,6 +38,7 @@ class LLMProvider(ABC):
     def analyze_image(self, image_data: bytes, prompt: str, max_tokens: int = 2000) -> Optional[LLMResponse]:
         pass
 
+
 class OCRProvider(ABC):
     @abstractmethod
     def extract_raw_text(self, image_data: bytes) -> OCRResponse:

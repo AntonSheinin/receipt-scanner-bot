@@ -6,6 +6,7 @@ import json
 import logging
 from typing import Optional, List, Dict, Any
 import telebot
+
 from config import TELEGRAM_BOT_TOKEN, MAX_MESSAGE_LENGTH, setup_logging
 
 
@@ -58,21 +59,22 @@ class TelegramService:
             self._send_fallback_message(chat_id)
             return False
 
-    def send_photo(self, chat_id: int, photo_path: str, caption: str = "") -> bool:
+    def send_photo(self, chat_id: int, photo: bytes, caption: str = "") -> bool:
         """
-        Send a photo to Telegram chat using a local file path.
+        Send a photo to Telegram chat from raw bytes.
+
+        Args:
+            chat_id: Telegram chat ID
+            photo: Raw image bytes
+            caption: Optional caption for the photo
         """
         try:
-            with open(photo_path, "rb") as photo_file:
-                self.bot.send_photo(chat_id, photo_file, caption=caption)
+            # pyTelegramBotAPI expects raw bytes directly
+            self.bot.send_photo(chat_id, photo, caption=caption)
             return True
 
-        except telebot.apihelper.ApiTelegramException as e:
-            logger.error(f"Telegram API error while sending photo: {e}")
-            return False
-
         except Exception as e:
-            logger.error(f"Unexpected error while sending photo: {e}")
+            logger.error(f"Error sending photo: {e}")
             return False
 
     def send_typing(self, chat_id: int) -> bool:

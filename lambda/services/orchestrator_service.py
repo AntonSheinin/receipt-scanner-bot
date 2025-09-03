@@ -12,8 +12,8 @@ from services.query_service import QueryService
 from services.telegram_service import TelegramService
 from services.storage_service import StorageService
 from config import MAX_RECEIPTS_PER_USER, setup_logging
-from providers.helpers import get_secure_user_id
-from providers.image_preprocessor.pillow_preprocessor import ImageStitchingAndPreprocessing
+from utils.helpers import get_secure_user_id
+from utils.image_preprocessor.pillow_preprocessor import ImageStitchingAndPreprocessing
 
 
 setup_logging()
@@ -22,9 +22,10 @@ logger = logging.getLogger(__name__)
 class MessageType(Enum):
     """Telegram message types"""
     PHOTO = "photo"
-    TEXT_QUERY = "text_query"
+    TEXT_QUERY = "text"
     COMMAND = "command"
     UNKNOWN = "unknown"
+
 
 class OrchestratorService:
     """Orchestrates message processing and routing"""
@@ -104,6 +105,7 @@ class OrchestratorService:
             if message_type == MessageType.COMMAND.value:
                 return self._handle_command_message(telegram_message, chat_id)
 
+
             logger.warning(f"Unknown message type for chat_id: {chat_id}")
             self.telegram_service.send_message(chat_id, "❓ לא הבנתי את סוג ההודעה. אנא שלח תמונה של קבלה או שאל שאלה.")
             return {"status": "unknown_message_type"}
@@ -168,41 +170,23 @@ class OrchestratorService:
         text = telegram_message.get('text', '').strip().lower()
         logger.info(f"Processing command for chat_id: {chat_id}, command: '{text}'")
 
-        if text == '/start':
-            return self._handle_welcome_message(chat_id)
+        if text in ('/start', '/help'):
+            welcome_message = self._get_welcome_message()
+            self.telegram_service.send_message(chat_id, welcome_message)
+            return {"status": "welcome_sent"}
 
-        if text == '/help':
-            return self._handle_help_command(chat_id)
-
-        if text == '/delete_last':
+        elif text == '/delete_last':
             return self._handle_delete_last_command(chat_id)
 
-        if text == '/delete_all':
+        elif text == '/delete_all':
             return self._handle_delete_all_command(chat_id)
 
-        self.telegram_service.send_message(
-            chat_id,
-            "❓ פקודה לא מזוהה. השתמש ב-/help כדי לראות פקודות זמינות."
-        )
-        return {"status": "unknown command"}
-
-    def _handle_welcome_message(self, chat_id):
-        """
-            Handle /start command
-        """
-
-        welcome_message = self._get_welcome_message()
-        self.telegram_service.send_message(chat_id, welcome_message)
-        return {"status": "welcome sent"}
-
-    def _handle_help_command(self, chat_id):
-        """
-            Handle /help command
-        """
-
-        help_message = self._get_help_message()
-        self.telegram_service.send_message(chat_id, help_message)
-        return {"status": "help sent"}
+        else:
+            self.telegram_service.send_message(
+                chat_id,
+                "❓ פקודה לא מזוהה. השתמש ב-/help כדי לראות פקודות זמינות."
+            )
+            return {"status": "unknown_command"}
 
     def _handle_delete_last_command(self, chat_id: int) -> Dict[str, Any]:
         """Handle /delete_last command"""
@@ -273,30 +257,3 @@ class OrchestratorService:
             "💡 טיפ: הקלד '/' כדי לראות את כל הפקודות הזמינות בתפריט!\n\n"
             "פשוט שלח תמונה ברורה של הקבלה שלך! 📸"
         )
-
-    def _get_help_message(self) -> str:
-        """Get detailed help message for /help command"""
-        return (
-            "📸 איך לצלם קבלה נכון:\n\n"
-            "• תשתדלו לצלם ולשלוח תמונת הקבלה באיכות HD ✨\n"
-            "• לצורך כך ליחצו על סימן HD בחלק התחתון של התמונה לאחר הצילום\n\n"
-            "⚡ מתי לצלם:\n"
-            "• מיד לאחר הקנייה בחנות 🏪\n"
-            "• לפני שהקבלה מתקמטת או דוהה\n"
-            "• כשהתאורה טובה ויש לך זמן לצלם בקפידה\n\n"
-            "🎯 טכניקת צילום נכונה:\n"
-            "• התקרב מקסימום לקבלה - מלא כל המסך 📏\n"
-            "• ודא שהתאריך רואים בבירור בתמונה 📅\n"
-            "• תאורה טובה - טבעית או מלאכותית חזקה 💡\n"
-            "• הקבלה פרושה ישר - ללא קמטים 📋\n"
-            "• המצלמה מקבילה לקבלה (לא באלכסון) 📐\n\n"
-            "📏 אם הקבלה ארוכה מדי:\n"
-            "• צלם עם המצלמה של הטלפון (לא דרך טלגרם) 📱\n"
-            "• צלם 2 תמונות נפרדות עם חפיפה קטנה:\n"
-            "  - תמונה 1: החלק העליון + כמה שורות מהאמצע\n"
-            "  - תמונה 2: כמה שורות מהאמצע + החלק התחתון\n"
-            "• בטלגרם: צרף שתי התמונות מהגלריה בהודעה אחת\n"
-            "• (טלגרם מאפשר רק תמונה אחת בצילום ישיר)\n\n"
-            f"📊 מגבלה: {MAX_RECEIPTS_PER_USER} קבלות לכל משתמש"
-        )
-

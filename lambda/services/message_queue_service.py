@@ -5,7 +5,6 @@
 import json
 import logging
 from typing import Dict, Any
-from datetime import datetime, timezone
 from config import get_sqs_client, SQS_QUEUE_URL, setup_logging
 from services.orchestrator_service import MessageType
 

@@ -12,6 +12,7 @@ from providers.provider_interfaces import LLMResponse
 from providers.llm.prompts import PromptManager
 from receipt_schemas import ReceiptAnalysisResult
 from pydantic import ValidationError
+from receipt_schemas import StitchingPlan
 
 
 setup_logging()
@@ -144,3 +145,26 @@ class LLMService:
     def generate_text(self, prompt: str, max_tokens: int = 3000) -> Optional[LLMResponse]:
         """Generate text using the LLM provider"""
         return self.provider.generate_text(prompt, max_tokens)
+
+    def generate_stitching_plan(self, first_image_b64: str, last_image_b64: str) -> Optional[Dict]:
+        """Analyze two images and generate stitching plan"""
+
+        logger.info("Generating stitching plan with LLM")
+
+        prompt = self.prompt_manager.format_stitching_prompt(first_image_b64, last_image_b64)
+        response = self.generate_text(prompt)
+
+        if not response:
+            logger.error("No response from LLM for stitching plan")
+            return None
+
+        # Parse JSON response
+        parsed_plan = self.parse_json_response(response.content)
+
+        if not parsed_plan:
+            logger.error("Failed to parse stitching plan JSON from LLM")
+            return None
+
+        logger.info(f"Generated filter plan: {parsed_plan}")
+
+        return StitchingPlan(**parsed_plan)

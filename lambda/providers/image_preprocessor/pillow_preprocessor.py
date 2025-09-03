@@ -35,6 +35,109 @@ class EnhancementConfig:
     enable_deskew: bool = False  # PIL doesn't have built-in deskew
 
 
+class SimpleImageStitching:
+        """Simple image stitching utilities with optional overlap detection"""
+    @staticmethod
+    def stitch_receipts_from_bytes(image_bytes_list: list[bytes]) -> bytes:
+        """
+        Stitch multiple receipt images vertically with overlap detection.
+
+        Args:
+            image_bytes_list: List of image bytes
+
+        Returns:
+            Stitched image as JPEG bytes
+        """
+        if not image_bytes_list:
+            raise ValueError("No images provided for stitching")
+
+        if len(image_bytes_list) == 1:
+            return image_bytes_list[0]
+
+        # Convert all images to OpenCV format
+        cv_images = [SimpleImageStitching._bytes_to_cv2(img_bytes)
+                     for img_bytes in image_bytes_list]
+
+        # Start with first image
+        stitched = cv_images[0]
+
+        # Stitch remaining images with overlap detection
+        for img in cv_images[1:]:
+            stitched = SimpleImageStitching._stitch_with_overlap(stitched, img)
+
+        # Convert back to bytes (no preprocessing - keep original quality)
+        return SimpleImageStitching._cv2_to_bytes(stitched)
+
+    @staticmethod
+    def _bytes_to_cv2(image_bytes: bytes) -> np.ndarray:
+        """Convert image bytes to OpenCV format (BGR), respecting EXIF orientation"""
+        # Open with PIL first to handle EXIF
+        pil_img = Image.open(io.BytesIO(image_bytes))
+        pil_img = ImageOps.exif_transpose(pil_img)  # Respect EXIF orientation
+
+        # Convert to RGB if needed
+        if pil_img.mode != "RGB":
+            pil_img = pil_img.convert("RGB")
+
+        # Convert to numpy array
+        arr = np.array(pil_img)
+
+        # Convert RGB to BGR for OpenCV
+        bgr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
+
+        # Auto-rotate if landscape (receipts should be portrait)
+        h, w = bgr.shape[:2]
+        if w > h:
+            bgr = cv2.rotate(bgr, cv2.ROTATE_90_CLOCKWISE)
+
+        return bgr
+
+    @staticmethod
+    def _cv2_to_bytes(cv_img: np.ndarray, quality: int = 95) -> bytes:
+        """Convert OpenCV image to JPEG bytes"""
+        success, buffer = cv2.imencode('.jpg', cv_img, [cv2.IMWRITE_JPEG_QUALITY, quality])
+        if not success:
+            raise ValueError("Failed to encode image")
+        return buffer.tobytes()
+
+    @staticmethod
+    def _stitch_with_overlap(img1: np.ndarray, img2: np.ndarray) -> np.ndarray:
+        """
+        Stitch two images with overlap detection using the original algorithm.
+        Simple and direct approach that works well for receipts.
+        """
+        # Use a safe slice height (min of 200 or 1/4 of current height)
+        slice_h = max(40, min(200, img1.shape[0] // 4))
+
+        # Get bottom slice of first image as template
+        template = cv2.cvtColor(img1[-slice_h:], cv2.COLOR_BGR2GRAY)
+
+        # Convert second image to grayscale
+        gray_img = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+
+        # Find template in second image
+        res = cv2.matchTemplate(gray_img, template, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, max_loc = cv2.minMaxLoc(res)
+
+        # CRITICAL: Only consider it overlap if match is at the TOP of image2
+        # Real overlap should be within the first 30% of the second image
+        if max_loc[1] < img2.shape[0] * 0.3:
+            # This looks like real overlap
+            y_offset = max_loc[1] + template.shape[0]
+            logger.info(f"Overlap detected: match at y={max_loc[1]}, confidence={max_val:.2f}, "
+                       f"removing {y_offset}px from top of second image")
+        else:
+            # Match is too far down - probably false positive
+            y_offset = 0
+            logger.info(f"No overlap: match at y={max_loc[1]} is too far down (confidence={max_val:.2f})")
+
+        # Crop second image from where overlap ends
+        img_cropped = img2[y_offset:] if y_offset > 0 else img2
+
+        # Concatenate vertically
+        return cv2.vconcat([img1, img_cropped])
+
+
 class ImageStitchingAndPreprocessing:
     @staticmethod
     def _load_cv2_with_exif(path: str) -> np.ndarray:

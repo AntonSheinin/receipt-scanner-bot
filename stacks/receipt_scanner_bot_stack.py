@@ -2,11 +2,9 @@
     Receipt Scanner Bot Stack - AWS CDK Infrastructure
 """
 
-import os
 import json
 from typing import Any, Tuple
 
-import aws_cdk as cdk
 from aws_cdk import Tags
 import aws_cdk.aws_rds as rds
 import aws_cdk.aws_ec2 as ec2

@@ -4,7 +4,6 @@
 
 import json
 from datetime import datetime
-from decimal import Decimal
 from typing import Any, Optional, Union, Dict
 import uuid
 from config import USER_ID_SALT
@@ -15,20 +14,20 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def normalize_date(date_str: str) -> Optional[str]:
-        """Normalize date to YYYY-MM-DD format"""
-        if not date_str:
-            return None
+    """Normalize date to YYYY-MM-DD format"""
+    if not date_str:
+        return None
 
-        formats = ['%d/%m/%Y', '%m/%d/%Y', '%Y-%m-%d', '%d-%m-%Y']
+    formats = ['%d/%m/%Y', '%m/%d/%Y', '%Y-%m-%d', '%d-%m-%Y']
 
-        for fmt in formats:
-            try:
-                dt = datetime.strptime(date_str.strip(), fmt)
-                return dt.strftime('%Y-%m-%d')
-            except ValueError:
-                continue
+    for fmt in formats:
+        try:
+            dt = datetime.strptime(date_str.strip(), fmt)
+            return dt.strftime('%Y-%m-%d')
+        except ValueError:
+            continue
 
-        return date_str  # Return as-is if can't parse
+    return date_str  # Return as-is if can't parse
 
 def get_secure_user_id(telegram_user_id: Union[str, int]) -> str:
     """

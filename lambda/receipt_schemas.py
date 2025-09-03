@@ -6,9 +6,8 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, List, Literal, Dict, Any
 from decimal import Decimal, InvalidOperation
 from providers.category_manager import category_manager
-from datetime import datetime, timedelta, timezone, date
+from datetime import timedelta, date
 from dateutil import parser as date_parser
-import re
 import logging
 from config import setup_logging
 
@@ -338,5 +337,48 @@ class ReceiptAnalysisResult(BaseModel):
             receipt_data=receipt_data,
             raw_text=raw_text,
         )
+
+class StitchingPlan(BaseModel):
+    """LLM-generated plan for stitching two receipt photos"""
+
+    # Rotation for each photo
+    top_rotate_deg: Literal[0, 90, 180, 270] = Field(
+        description="Rotation for top photo"
+    )
+    bottom_rotate_deg: Literal[0, 90, 180, 270] = Field(
+        description="Rotation for bottom photo"
+    )
+
+    # Overlap bounds in pixels
+    min_overlap_px: int = Field(
+        ge=0,
+        le=1000,
+        description="Minimum overlap"
+    )
+    max_overlap_px: int = Field(
+        ge=0,
+        le=2000,
+        description="Maximum overlap"
+    )
+
+    # Enhancement factors
+    enhance_contrast: float = Field(
+        ge=0.5,
+        le=3.0,
+        description="Contrast factor"
+    )
+    enhance_brightness: float = Field(
+        ge=0.5,
+        le=2.0,
+        description="Brightness factor"
+    )
+
+    @field_validator('max_overlap_px')
+    @classmethod
+    def validate_overlap_range(cls, v: int, info) -> int:
+        """Ensure max > min"""
+        if 'min_overlap_px' in info.data and v <= info.data['min_overlap_px']:
+            raise ValueError(f"max_overlap_px ({v}) must be greater than min_overlap_px ({info.data['min_overlap_px']})")
+        return v
 
 

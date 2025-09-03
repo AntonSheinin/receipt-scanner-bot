@@ -9,7 +9,7 @@ from services.telegram_service import TelegramService
 from services.storage_service import StorageService
 from services.document_processor_service import DocumentProcessorService
 from providers.helpers import create_response
-from config import MAX_ITEMS_DISPLAY, MAX_ITEM_NAME_LENGTH, setup_logging, MAX_RECEIPTS_PER_USER
+from config import MAX_ITEMS_DISPLAY, MAX_ITEM_NAME_LENGTH, setup_logging
 from providers.helpers import get_secure_user_id
 from receipt_schemas import ReceiptAnalysisResult
 from providers.category_manager import category_manager
