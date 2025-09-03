@@ -22,7 +22,9 @@ logger = logging.getLogger(__name__)
 class MessageType(Enum):
     """Telegram message types"""
     PHOTO = "photo"
-    TEXT = "text"
+    TEXT_QUERY = "text_query"
+    COMMAND = "command"
+    UNKNOWN = "unknown"
 
 
 class OrchestratorService:
@@ -97,11 +99,11 @@ class OrchestratorService:
             if message_type == MessageType.PHOTO.value:
                 return self._handle_photo_message(telegram_message, chat_id)
 
-            if message_type == MessageType.TEXT.value:
-                if not telegram_message.get('text', '').startswith('/'):
-                    return self._handle_text_query(telegram_message, chat_id)
-                else:
-                    return self._handle_command_message(telegram_message, chat_id)
+            if message_type == MessageType.TEXT_QUERY.value:
+                return self._handle_text_query(telegram_message, chat_id)
+
+            if message_type == MessageType.COMMAND.value:
+                return self._handle_command_message(telegram_message, chat_id)
 
             logger.warning(f"Unknown message type for chat_id: {chat_id}")
             self.telegram_service.send_message(chat_id, "❓ לא הבנתי את סוג ההודעה. אנא שלח תמונה של קבלה או שאל שאלה.")
