@@ -9,7 +9,7 @@ import logging
 from google.cloud import vision
 from typing import List, Dict, Any
 from decimal import Decimal
-from config import setup_logging
+from config import setup_logging, GOOGLE_CREDENTIALS_JSON
 from utils.helpers import normalize_date
 from provider_interfaces import OCRProvider, OCRResponse
 from receipt_schemas import ReceiptItem
@@ -23,15 +23,14 @@ logger = logging.getLogger(__name__)
 class GoogleVisionProvider(OCRProvider):
     def __init__(self):
         # Initialize client with service account key
-        credentials_json = os.getenv('GOOGLE_CREDENTIALS_JSON')
 
-        if credentials_json:
+        if GOOGLE_CREDENTIALS_JSON:
             creds = service_account.Credentials.from_service_account_info(
-                json.loads(credentials_json)
+                json.loads(GOOGLE_CREDENTIALS_JSON)
             )
             self.client = vision.ImageAnnotatorClient(credentials=creds)
         else:
-            logger.error("GOOGLE_CREDENTIALS_JSON environment variable not set")
+            logger.error("GOOGLE_CREDENTIALS_JSON variable not set")
             self.client = vision.ImageAnnotatorClient()
 
     def extract_raw_text(self, image_data: bytes) -> OCRResponse:

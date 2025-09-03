@@ -7,7 +7,7 @@ import base64
 import logging
 from openai import OpenAI
 from provider_interfaces import LLMProvider, LLMResponse
-from config import setup_logging
+from config import setup_logging, OPENAI_API_KEY, OPENAI_MODEL_ID
 import os
 
 
@@ -16,12 +16,8 @@ logger = logging.getLogger(__name__)
 
 class OpenAIProvider(LLMProvider):
     def __init__(self):
-        api_key = os.getenv('OPENAI_API_KEY')
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable is required")
-
-        self.client = OpenAI(api_key=api_key)
-        self.model_id = os.getenv('OPENAI_MODEL_ID', '')
+        self.client = OpenAI(api_key=OPENAI_API_KEY)
+        self.model_id = OPENAI_MODEL_ID
 
     def generate_text(self, prompt: str, max_tokens: int = 3000) -> Optional[LLMResponse]:
         """Generate text response from prompt"""

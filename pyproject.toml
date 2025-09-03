@@ -4,26 +4,38 @@ version = "0.6.0"
 description = "Telegram bot for scanning and analyzing receipts"
 readme = "README.md"
 requires-python = ">=3.12"
+
 dependencies = [
-    # Lambda runtime dependencies
-    pyTelegramBotAPI==4.28.0
-    google-cloud-vision==3.4.0
-    Pillow==11.3.0
-    openai==1.52.0
-    pydantic==2.11.7
-    psycopg[binary]==3.2.9
-    python-dateutil
-    opencv-python-headless
+    # CDK deployment dependencies only
+    "aws-cdk-lib>=2.150.0",
+    "constructs>=10.0.0",
+    "python-dotenv>=1.0.0",
+    "boto3"
 ]
 
 [project.optional-dependencies]
-# CDK deployment dependencies
-cdk = [
-    "aws-cdk-lib>=2.150.0",
-    "constructs>=10.0.0",
-    "python-dotenv>=1.0.0"
+# Lambda runtime dependencies (not needed for CDK deployment)
+lambda = [
+    "pyTelegramBotAPI==4.28.0",
+    "google-cloud-vision==3.4.0",
+    "Pillow==11.3.0",
+    "openai==1.52.0",
+    "pydantic==2.11.7",
+    "psycopg[binary]==3.2.9",
+    "python-dateutil",
+    "opencv-python-headless"
 ]
+
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["stacks*"]
+exclude = ["lambda*", "tests*", "docs*", "*.egg-info*"]
+
+[tool.setuptools]
+zip-safe = false
 
 [tool.ty.rules]
 unresolved-import = "ignore"
-
