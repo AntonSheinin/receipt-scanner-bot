@@ -10,7 +10,7 @@ from services.telegram_service import TelegramService
 from services.storage_service import StorageService
 from services.llm_service import LLMService
 from providers.helpers import create_response, get_secure_user_id
-from providers.llm.prompts import PromptManager
+from providers.llm.prompts_manager import PromptsManager
 
 
 setup_logging()
@@ -23,7 +23,7 @@ class QueryService:
         self.telegram = TelegramService()
         self.storage = StorageService()
         self.llm = LLMService(LLM_PROVIDER)
-        self.prompts = PromptManager()
+        self.prompts = PromptsManager()
 
     def process_query(self, question: str, chat_id: int) -> Dict:
         """Handle natural language queries in 3 simplified steps"""

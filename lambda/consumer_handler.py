@@ -4,6 +4,8 @@
 
 import json
 import logging
+import io
+import base64
 from typing import Dict, Any
 from config import setup_logging, get_s3_client, S3_BUCKET_NAME
 from services.orchestrator_service import OrchestratorService
@@ -11,6 +13,9 @@ from services.telegram_service import TelegramService
 from services.receipt_service import ReceiptService
 from botocore.exceptions import ClientError
 from providers.image_preprocessor.pillow_preprocessor import SimpleImageStitching
+from services.llm_service import LLMService
+from config import LLM_PROVIDER
+from providers.image_preprocessor.pillow_preprocessor import IntelligentReceiptStitcher
 
 
 setup_logging()
@@ -146,17 +151,24 @@ def process_album(chat_id: int, first_photo_key: str, second_message: Dict[str, 
         logger.info("Got both photos, stitching...")
         telegram_service.send_message(chat_id, "🔄 מחבר את התמונות...")
 
-        # Simple vertical stitching using SimpleImageStitching
-        stitched_bytes = SimpleImageStitching.stitch_receipts_from_bytes(
-            [first_photo_bytes, second_photo_bytes]
-        )
+        # ---------------------------Stiching photos--------------------------------
+
+        # Get base64 encoded images
+        img1_b64 = base64.b64encode(first_photo_bytes).decode('utf-8')
+        img2_b64 = base64.b64encode(second_photo_bytes).decode('utf-8')
+
+        stitcher = IntelligentReceiptStitcher()
+        llm_service = LLMService(LLM_PROVIDER)
+        plan = llm_service.generate_stitching_plan(img1_b64, img2_b64)
+        stitched_bytes = stitcher.stitch_with_plan(first_photo_bytes, second_photo_bytes, plan)
+
+        # --------------------------------------------------------------------------
 
         # TESTING: Send stitched photo back to user for visual verification
         logger.info("TESTING MODE: Sending stitched photo back to user")
 
         # Convert bytes to file-like object for Telegram API
-        from io import BytesIO
-        photo_file = BytesIO(stitched_bytes)
+        photo_file = io.BytesIO(stitched_bytes)
         photo_file.name = 'stitched_receipt.jpg'  # Telegram needs a filename
 
         telegram_service.send_photo(

@@ -1,10 +1,9 @@
 """
-    Producer Lambda - Telegram Webhook Handler
+    Producer Lambda - Telegram Bot Handler
 """
 
 import json
 import logging
-from typing import Dict, Any, Optional
 from config import setup_logging
 from services.telegram_service import TelegramService
 from services.message_queue_service import MessageQueueService
@@ -21,7 +20,7 @@ _processed_updates = set()
 telegram_service = TelegramService()
 queue_service = MessageQueueService()
 
-def lambda_handler(event: Dict[str, Any], context: Any) -> Optional[Dict[str, Any]]:
+def lambda_handler(event: dict, context) -> dict | None:
     """Producer Lambda - Only queues messages, no processing"""
 
     logger.info(f"Producer received webhook: {json.dumps(event, default=str)}")

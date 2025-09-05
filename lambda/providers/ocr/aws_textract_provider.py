@@ -11,7 +11,7 @@ from botocore.exceptions import ClientError
 from config import setup_logging, AWS_REGION
 from providers.category_manager import category_manager
 from providers.provider_interfaces import OCRProvider, OCRResponse
-from receipt_schemas import ReceiptItem
+from schemas import ReceiptItem
 
 
 setup_logging()

@@ -9,10 +9,9 @@ import json
 from config import setup_logging
 from providers.provider_factory import ProviderFactory
 from providers.provider_interfaces import LLMResponse
-from providers.llm.prompts import PromptManager
-from receipt_schemas import ReceiptAnalysisResult
+from providers.llm.prompts_manager import PromptsManager
+from schemas import ReceiptAnalysisResult, StitchingPlan
 from pydantic import ValidationError
-from receipt_schemas import StitchingPlan
 
 
 setup_logging()
@@ -21,7 +20,7 @@ logger = logging.getLogger(__name__)
 class LLMService:
     def __init__(self, provider_name: str):
         self.provider = ProviderFactory.create_llm_provider(provider_name)
-        self.prompt_manager = PromptManager()
+        self.prompt_manager = PromptsManager()
 
     def analyze_receipt(self, image_data: bytes) -> Optional[ReceiptAnalysisResult]:
         """Analyze receipt image"""
@@ -151,7 +150,7 @@ class LLMService:
 
         logger.info("Generating stitching plan with LLM")
 
-        prompt = self.prompt_manager.format_stitching_prompt(first_image_b64, last_image_b64)
+        prompt = self.prompt_manager.format_stitching_request(first_image_b64, last_image_b64)
         response = self.generate_text(prompt)
 
         if not response:

@@ -10,7 +10,7 @@ from config import OCR_PROCESSING_MODE, DOCUMENT_PROCESSING_MODE, OCR_PROVIDER, 
 from services.llm_service import LLMService
 from providers.provider_factory import ProviderFactory
 from providers.image_preprocessor.pillow_preprocessor import ImagePreprocessorPillow
-from receipt_schemas import ReceiptAnalysisResult
+from schemas import ReceiptAnalysisResult
 
 
 setup_logging()
