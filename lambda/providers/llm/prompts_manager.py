@@ -404,17 +404,35 @@ class PromptsManager:
 
     @staticmethod
     def get_stitching_analysis_prompt() -> str:
-        """
-            System prompt: detect the FULL duplicated band (all overlapping rows) between
-            the bottom of the first image (top part) and the top of the second image (bottom part),
-            and output the stitching plan JSON using the exact schema below.
-        """
+        """Enhanced prompt for precise overlap detection"""
         return (
             "You are an expert vision model analyzing two photos of the same store receipt.\n"
             "The first image is ALWAYS the top part, the second image is the bottom part.\n"
-            "Your goal is to create a stitching plan that removes the ENTIRE duplicated band at the start of the second image.\n\n"
+            "Your goal: Remove ONLY the duplicated content from the second image - no more, no less.\n\n"
 
-            "Respond ONLY in JSON following this exact schema:\n"
+            "PRECISE OVERLAP DETECTION:\n"
+            "1. Compare the BOTTOM portion of image 1 with the TOP portion of image 2\n"
+            "2. Find the EXACT range where both images show identical content:\n"
+            "   - Same text lines (item names, prices, store info)\n"
+            "   - Same formatting and positioning\n"
+            "   - Same visual elements (lines, logos, spacing)\n"
+            "3. Identify the LAST row in image 1 that also appears in image 2\n"
+            "4. Identify the FIRST row in image 2 that matches content in image 1\n"
+            "5. Count pixels from top of image 2 to the FIRST row with NEW content\n\n"
+
+            "CRITICAL RULES:\n"
+            "- Remove ALL duplicate rows, but NEVER remove unique content\n"
+            "- The crop boundary must be at a complete text line, not mid-line\n"
+            "- If unsure about a row, examine surrounding context for confirmation\n"
+            "- Typical overlaps: 2-6 text lines (roughly 120-320 pixels)\n\n"
+
+            "VERIFICATION CHECKLIST:\n"
+            "After determining crop_pixels_from_top, verify:\n"
+            "✓ The row just below the crop point is NEW content (not in image 1)\n"
+            "✓ All rows above the crop point are duplicates (also in image 1)\n"
+            "✓ No unique information will be lost\n\n"
+
+            "Respond ONLY in JSON:\n"
             "{\n"
             "  \"top_rotate_deg\": 0 | 90 | 180 | 270,\n"
             "  \"bottom_rotate_deg\": 0 | 90 | 180 | 270,\n"
@@ -424,30 +442,11 @@ class PromptsManager:
             "  \"enhance_brightness\": number\n"
             "}\n\n"
 
-            "Field semantics and guidance:\n"
-            "- top_rotate_deg / bottom_rotate_deg: Use only 0/90/180/270. Prefer 0 if text is upright and readable.\n"
-            "- crop_pixels_from_top: NON-NEGATIVE integer pixels to trim from the TOP of the SECOND image to remove the FULL duplicated band (ALL overlapping rows) that also appears at the BOTTOM of the first image.\n"
-            "  • Detect multiple matching lines, not just a single line.\n"
-            "  • Expand the band until the first line of NEW content on the second image (do not leave any duplicate row).\n"
-            "  • Typical receipts have overlaps in the ~120–320 px range, but use the actual visual evidence.\n"
-            "- background_threshold: If the sheet/background separation is clearly a single light threshold, return a grayscale threshold in [160..255]; otherwise return null (auto-bbox will handle it).\n"
+            "crop_pixels_from_top: Exact pixels to crop from image 2 top\n"
+            "- Count to the first pixel of NEW content\n"
+            "- Include all duplicate rows above this point\n"
+            "- Must preserve all unique information\n"
+            "- Set to 0 only if truly no overlap exists\n"
             "- enhance_contrast: Mild multiplier in [1.0..3.0] (often 1.2–1.8).\n"
             "- enhance_brightness: Mild multiplier in [0.8..2.0] (often 1.0–1.2).\n\n"
-
-            "How to detect the FULL overlap robustly:\n"
-            "1) Normalize widths if necessary (conceptually align columns). Compare in grayscale.\n"
-            "2) Use MULTI-ANCHOR matching: identify at least TWO distinct matching horizontal rows (e.g., item lines, separators) at the bottom of image 1 and the top of image 2 with consistent vertical spacing.\n"
-            "3) Sweep candidate band heights K over a practical range (e.g., 50..400 px depending on scale). For each K, compare LAST K rows of image 1 with FIRST K rows of image 2.\n"
-            "5) EXPAND the matched band upward/downward to include ALL consecutive duplicated rows until the first line that diverges (the first NEW row on image 2).\n"
-            "6) Sanity check at the crop boundary: the first visible row AFTER cropping on image 2 must NOT appear at the end of image 1 (no partial duplicates cut).\n"
-            "7) If the match is uncertain or extremely short, set crop_pixels_from_top = 0.\n\n"
-
-            "Bias and validation:\n"
-            "- Ensure rotations remain one of {0,90,180,270}; do not invent other angles.\n"
-            "- Keep enhancement values conservative to avoid artifacts.\n\n"
-
-            "Formatting rules:\n"
-            "- Return only the JSON object matching the schema above.\n"
-            "- Do not add comments, markdown, trailing commas, or extra keys.\n"
-            "- Use numbers (not strings) for numeric fields.\n"
         )

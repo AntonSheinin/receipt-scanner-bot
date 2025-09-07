@@ -11,12 +11,15 @@ from functools import lru_cache
 
 # ---------- App Configuration -----------------------
 AWS_REGION = 'eu-west-1'
+BEDROCK_REGION = 'eu-west-1'
 
 # LLM Configuration
 LLM_PROVIDER = 'bedrock'  # Options: bedrock, openai
-BEDROCK_MODEL_ID = 'eu.anthropic.claude-3-7-sonnet-20250219-v1:0' # eu.anthropic.claude-sonnet-4-20250514-v1:0
-BEDROCK_REGION = 'eu-west-1'
-OPENAI_MODEL_ID = 'gpt-5-nano-2025-08-07' # gpt-5-chat-latest, gpt-4.1-2025-04-14, gpt-5-nano-2025-08-07
+STITCHING_LLM_PROVIDER = 'openai'  # Options: bedrock, openai
+
+# LLM Model IDs
+BEDROCK_MODEL_ID = 'eu.anthropic.claude-3-7-sonnet-20250219-v1:0' # eu.anthropic.claude-sonnet-4-20250514-v1:0, eu.anthropic.claude-3-7-sonnet-20250219-v1:0
+OPENAI_MODEL_ID = 'gpt-5-nano-2025-08-07' # gpt-5-chat-latest, gpt-4.1-2025-04-14, gpt-5-nano-2025-08-07, gpt-5-nano-2025-08-07
 
 # OCR Configuration
 OCR_PROVIDER = 'google_vision' # Options: aws_textract, google_vision

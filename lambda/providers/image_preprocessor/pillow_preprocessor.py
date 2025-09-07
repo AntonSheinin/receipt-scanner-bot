@@ -10,8 +10,11 @@ import logging
 from typing import Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
+from config import setup_logging
+from schemas import StitchingPlan
+import logging
 
-
+setup_logging()
 logger = logging.getLogger(__name__)
 
 class ProcessingMode(Enum):
@@ -34,16 +37,6 @@ class EnhancementConfig:
     enable_auto_orient: bool = True
     enable_deskew: bool = False  # PIL doesn't have built-in deskew
 
-
-# Add this class to pillow_preprocessor.py
-
-import cv2
-import numpy as np
-from io import BytesIO
-from PIL import Image, ImageOps, ImageEnhance
-from typing import Optional
-from schemas import StitchingPlan
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -90,9 +83,10 @@ class IntelligentReceiptStitcher:
                     plan.enhance_brightness
                 )
 
-            # Crop background if threshold specified
             if plan.background_threshold is not None:
                 stitched = IntelligentReceiptStitcher._crop_background(stitched, plan.background_threshold)
+            else:
+                stitched = IntelligentReceiptStitcher._auto_bbox_crop(stitched)
 
             return IntelligentReceiptStitcher._cv2_to_bytes(stitched)
 
@@ -103,7 +97,7 @@ class IntelligentReceiptStitcher:
     @staticmethod
     def _bytes_to_cv2(image_bytes: bytes) -> np.ndarray:
         """Convert image bytes to OpenCV format with EXIF handling"""
-        pil_img = Image.open(BytesIO(image_bytes))
+        pil_img = Image.open(io.BytesIO(image_bytes))
         pil_img = ImageOps.exif_transpose(pil_img)  # Handle EXIF orientation
 
         if pil_img.mode != "RGB":
@@ -225,6 +219,47 @@ class IntelligentReceiptStitcher:
             return cropped
         else:
             logger.warning("No content found for background cropping")
+            return img
+
+    @staticmethod
+    def _auto_bbox_crop(img: np.ndarray) -> np.ndarray:
+        """
+        Automatically detect and crop receipt content using simple thresholding.
+
+        Args:
+            img: Input image in OpenCV format
+
+        Returns:
+            Cropped image containing only the receipt content
+        """
+        try:
+            # Convert to grayscale
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+            # Use Otsu's method to find optimal threshold automatically
+            _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+
+            # Find all non-zero (content) pixels
+            coords = cv2.findNonZero(binary)
+            if coords is None:
+                return img
+
+            # Get bounding rectangle
+            x, y, w, h = cv2.boundingRect(coords)
+
+            # Add small padding and ensure within bounds
+            padding = 10
+            x = max(0, x - padding)
+            y = max(0, y - padding)
+            w = min(img.shape[1] - x, w + 2 * padding)
+            h = min(img.shape[0] - y, h + 2 * padding)
+
+            cropped = img[y:y+h, x:x+w]
+            logger.info(f"Auto bbox crop: {img.shape} -> {cropped.shape}")
+            return cropped
+
+        except Exception as e:
+            logger.warning(f"Auto bbox failed: {e}")
             return img
 
 

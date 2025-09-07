@@ -13,7 +13,7 @@ from services.telegram_service import TelegramService
 from services.receipt_service import ReceiptService
 from botocore.exceptions import ClientError
 from services.llm_service import LLMService
-from config import LLM_PROVIDER
+from config import LLM_PROVIDER, STITCHING_LLM_PROVIDER
 from providers.image_preprocessor.pillow_preprocessor import IntelligentReceiptStitcher
 
 
@@ -157,7 +157,7 @@ def process_album(chat_id: int, first_photo_key: str, second_message: Dict[str, 
         img2_b64 = base64.b64encode(second_photo_bytes).decode('utf-8')
 
         stitcher = IntelligentReceiptStitcher()
-        llm_service = LLMService(LLM_PROVIDER)
+        llm_service = LLMService(STITCHING_LLM_PROVIDER)
         plan = llm_service.generate_stitching_plan(img1_b64, img2_b64)
         stitched_bytes = stitcher.stitch_with_plan(first_photo_bytes, second_photo_bytes, plan)
 
