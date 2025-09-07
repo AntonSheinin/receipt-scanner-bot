@@ -12,7 +12,6 @@ from services.orchestrator_service import OrchestratorService
 from services.telegram_service import TelegramService
 from services.receipt_service import ReceiptService
 from botocore.exceptions import ClientError
-from providers.image_preprocessor.pillow_preprocessor import SimpleImageStitching
 from services.llm_service import LLMService
 from config import LLM_PROVIDER
 from providers.image_preprocessor.pillow_preprocessor import IntelligentReceiptStitcher

@@ -145,13 +145,14 @@ class LLMService:
         """Generate text using the LLM provider"""
         return self.provider.generate_text(prompt, max_tokens)
 
-    def generate_stitching_plan(self, first_image_b64: str, last_image_b64: str) -> Optional[Dict]:
+    def generate_stitching_plan(self, first_image_b64: str, second_image_b64: str) -> Optional[Dict]:
         """Analyze two images and generate stitching plan"""
 
         logger.info("Generating stitching plan with LLM")
 
-        prompt = self.prompt_manager.format_stitching_request(first_image_b64, last_image_b64)
-        response = self.generate_text(prompt)
+        prompt = self.prompt_manager.get_stitching_analysis_prompt()
+
+        response = self.provider.analyze_images_for_stitching(first_image_b64, second_image_b64, prompt)
 
         if not response:
             logger.error("No response from LLM for stitching plan")
@@ -164,6 +165,6 @@ class LLMService:
             logger.error("Failed to parse stitching plan JSON from LLM")
             return None
 
-        logger.info(f"Generated filter plan: {parsed_plan}")
+        logger.info(f"Generated stitching plan: {parsed_plan}")
 
         return StitchingPlan(**parsed_plan)

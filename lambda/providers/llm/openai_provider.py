@@ -86,3 +86,47 @@ class OpenAIProvider(LLMProvider):
         except Exception as e:
             logger.error(f"OpenAI image analysis error: {e}")
             return None
+
+    def analyze_images_for_stitching(self, first_image_b64: str, second_image_b64: str, prompt: str, max_tokens: int = 3000) -> Optional[LLMResponse]:
+        """Analyze two images for stitching plan generation"""
+
+        logger.info(f"Analyzing images for stitching with OpenAI model: {self.model_id}")
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model_id,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{first_image_b64}",
+                                    "detail": "high"
+                                }
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{second_image_b64}",
+                                    "detail": "high"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                max_completion_tokens=max_tokens
+            )
+
+            if response.choices and response.choices[0].message.content:
+                content = response.choices[0].message.content
+                usage_tokens = response.usage.completion_tokens if response.usage else None
+                return LLMResponse(content=content, usage_tokens=usage_tokens)
+
+            return None
+
+        except Exception as e:
+            logger.error(f"OpenAI stitching analysis error: {e}")
+            return None

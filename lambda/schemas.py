@@ -341,44 +341,11 @@ class ReceiptAnalysisResult(BaseModel):
 class StitchingPlan(BaseModel):
     """LLM-generated plan for stitching two receipt photos"""
 
-    # Rotation for each photo
-    top_rotate_deg: Literal[0, 90, 180, 270] = Field(
-        description="Rotation for top photo"
-    )
-    bottom_rotate_deg: Literal[0, 90, 180, 270] = Field(
-        description="Rotation for bottom photo"
-    )
-
-    # Overlap bounds in pixels
-    min_overlap_px: int = Field(
-        ge=0,
-        le=1000,
-        description="Minimum overlap"
-    )
-    max_overlap_px: int = Field(
-        ge=0,
-        le=2000,
-        description="Maximum overlap"
-    )
-
-    # Enhancement factors
-    enhance_contrast: float = Field(
-        ge=0.5,
-        le=3.0,
-        description="Contrast factor"
-    )
-    enhance_brightness: float = Field(
-        ge=0.5,
-        le=2.0,
-        description="Brightness factor"
-    )
-
-    @field_validator('max_overlap_px')
-    @classmethod
-    def validate_overlap_range(cls, v: int, info) -> int:
-        """Ensure max > min"""
-        if 'min_overlap_px' in info.data and v <= info.data['min_overlap_px']:
-            raise ValueError(f"max_overlap_px ({v}) must be greater than min_overlap_px ({info.data['min_overlap_px']})")
-        return v
+    top_rotate_deg: Literal[0, 90, 180, 270] = Field(description="Rotation for top photo")
+    bottom_rotate_deg: Literal[0, 90, 180, 270] = Field(description="Rotation for bottom photo")
+    crop_pixels_from_top: int = Field(ge=0, le=2000, description="Exact pixels to crop from top of second image to remove overlap")
+    background_threshold: Optional[int] = Field(None, ge=160, le=255)
+    enhance_contrast: float = Field(ge=0.5, le=3.0, description="Contrast factor")
+    enhance_brightness: float = Field(ge=0.5, le=2.0, description="Brightness factor")
 
 

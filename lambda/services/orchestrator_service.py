@@ -13,7 +13,6 @@ from services.telegram_service import TelegramService
 from services.storage_service import StorageService
 from config import MAX_RECEIPTS_PER_USER, setup_logging
 from providers.helpers import get_secure_user_id
-from providers.image_preprocessor.pillow_preprocessor import ImageStitchingAndPreprocessing
 
 
 setup_logging()
@@ -37,55 +36,6 @@ class OrchestratorService:
         self.storage_service = StorageService()
 
         logger.info("OrchestratorService initialized with all services")
-
-    def process_telegram_album(self, album_messages: list):
-        """
-            Combine all images in a Telegram album, preprocess them, and call process_telegram_message.
-        """
-        if not album_messages:
-            logger.warning("Empty album received, skipping processing")
-            return None
-
-        chat_id = album_messages[0]['chat_id']
-        logger.info(f"Processing album with {len(album_messages)} images for chat_id {chat_id}")
-
-        # Use a single temporary directory for all downloaded images
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            img_paths = []
-
-            try:
-                # Download images to temp dir
-                for msg in album_messages:
-                    if "photo" not in msg:
-                        continue
-                    photo_sizes = msg["photo"]
-                    file_id = photo_sizes[-1]["file_id"]
-                    local_path = self.telegram_service.download_file(file_id, download_dir=tmp_dir)
-                    img_paths.append(local_path)
-
-                if not img_paths:
-                    logger.warning("No images found in album messages")
-                    return None
-
-                # Stitch, deskew, and preprocess in memory
-                stitched_img = ImageStitchingAndPreprocessing.stitch_receipts(img_paths)
-                deskewed_img = ImageStitchingAndPreprocessing.deskew_image(stitched_img)
-                preprocessed_img = ImageStitchingAndPreprocessing.preprocess_for_ocr(deskewed_img)
-
-                # Save preprocessed image to a temporary file and call the existing message processor
-                with tempfile.NamedTemporaryFile(suffix=".png") as tmp_file:
-                    preprocessed_img.save(tmp_file.name)
-                    combined_message = {
-                        "chat_id": chat_id,
-                        "photo": [{"file_path": tmp_file.name}]
-                    }
-
-                    self.telegram_service.send_photo(chat_id, tmp_file.name, caption="📸 Combined & preprocessed photo")
-                    # return self.process_telegram_message(combined_message)
-
-            except Exception as e:
-                logger.error(f"Failed to process telegram album: {e}", exc_info=True)
-                return None
 
     def process_telegram_message(self, telegram_message: Dict[str, Any]) -> Dict[str, Any]:
         """Main orchestration method - routes message to appropriate service"""

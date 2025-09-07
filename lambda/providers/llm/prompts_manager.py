@@ -64,7 +64,7 @@ class PromptsManager:
 
             {
                 "store_name": "name of the store/business",
-                "purchasing_date": "date in YYYY-MM-DD format",
+                "purchasing_date": "date in YYYY-MM-DD format, always look on CRITICAL DATE PARSING RULES below for correct parsing",
                 "receipt_number": "receipt/transaction number if available",
                 "payment_method": "cash|credit_card|other",
                 "items": [
@@ -110,7 +110,6 @@ class PromptsManager:
             * "25/12/24" = December 25, 2024
             * "03/01/23" = January 3, 2023
             - ALWAYS output date in YYYY-MM-DD format
-            - If date is ambiguous, use context clues (receipt freshness, other dates on receipt)
             - If unable to determine year definitively, assume current decade (202X)
             - if the recognized year is 2023, that is probably recognition error - change it to 2025
             - carefully check that the final date is valid and correctly formatted
@@ -185,7 +184,7 @@ class PromptsManager:
 
             {{
                 "store_name": "name of the store/business",
-                "purchasing_date": "date in DD/MM/YYYY format",
+                "purchasing_date": "date in YYYY-MM-DD format, always look on CRITICAL DATE PARSING RULES below for correct parsing",
                 "receipt_number": "receipt/transaction number if available",
                 "payment_method": "cash|credit_card|other",
                 "items": [
@@ -406,69 +405,49 @@ class PromptsManager:
     @staticmethod
     def get_stitching_analysis_prompt() -> str:
         """
-            Get the system prompt for analyzing two receipt photos for stitching.
-            Returns the prompt that instructs LLM how to analyze and create a stitching plan.
+            System prompt: detect the FULL duplicated band (all overlapping rows) between
+            the bottom of the first image (top part) and the top of the second image (bottom part),
+            and output the stitching plan JSON using the exact schema below.
         """
         return (
-            "You are a careful vision assistant. Given two photos of the same long receipt, "
-            "analyze them and determine the best way to stitch them together. "
-            "The first photo is the TOP part, the second is the BOTTOM part. "
-            "Examine orientation, overlap, and quality to create a processing plan.\n\n"
+            "You are an expert vision model analyzing two photos of the same store receipt.\n"
+            "The first image is ALWAYS the top part, the second image is the bottom part.\n"
+            "Your goal is to create a stitching plan that removes the ENTIRE duplicated band at the start of the second image.\n\n"
+
             "Respond ONLY in JSON following this exact schema:\n"
             "{\n"
-            '  "top_rotate_deg": 0 | 90 | 180 | 270,\n'
-            '  "bottom_rotate_deg": 0 | 90 | 180 | 270,\n'
-            '  "min_overlap_px": number (typically 50-200),\n'
-            '  "max_overlap_px": number (typically 200-800),\n'
-            '  "background_threshold": number | null (200-250 for white backgrounds, null to skip),\n'
-            '  "enhance_contrast": number (1.0-2.5, typically 1.5),\n'
-            '  "enhance_brightness": number (0.8-1.5, typically 1.1)\n'
+            "  \"top_rotate_deg\": 0 | 90 | 180 | 270,\n"
+            "  \"bottom_rotate_deg\": 0 | 90 | 180 | 270,\n"
+            "  \"crop_pixels_from_top\": number,\n"
+            "  \"background_threshold\": number | null,\n"
+            "  \"enhance_contrast\": number,\n"
+            "  \"enhance_brightness\": number\n"
             "}\n\n"
-            "Guidelines:\n"
-            "- Most receipts are already portrait and need no rotation (0 degrees)\n"
-            "- Look for text orientation to determine if rotation is needed\n"
-            "- Overlap typically ranges from 100-500 pixels for receipt photos\n"
-            "- Set background_threshold to 220-240 if receipt has white/light background to remove\n"
-            "- Use moderate enhancement (contrast ~1.5, brightness ~1.1) for clear receipts\n"
-            "- Increase contrast (up to 2.0) for faded or low-contrast receipts\n"
-            "- Return ONLY valid JSON, no explanations or markdown"
+
+            "Field semantics and guidance:\n"
+            "- top_rotate_deg / bottom_rotate_deg: Use only 0/90/180/270. Prefer 0 if text is upright and readable.\n"
+            "- crop_pixels_from_top: NON-NEGATIVE integer pixels to trim from the TOP of the SECOND image to remove the FULL duplicated band (ALL overlapping rows) that also appears at the BOTTOM of the first image.\n"
+            "  • Detect multiple matching lines, not just a single line.\n"
+            "  • Expand the band until the first line of NEW content on the second image (do not leave any duplicate row).\n"
+            "  • Typical receipts have overlaps in the ~120–320 px range, but use the actual visual evidence.\n"
+            "- background_threshold: If the sheet/background separation is clearly a single light threshold, return a grayscale threshold in [160..255]; otherwise return null (auto-bbox will handle it).\n"
+            "- enhance_contrast: Mild multiplier in [1.0..3.0] (often 1.2–1.8).\n"
+            "- enhance_brightness: Mild multiplier in [0.8..2.0] (often 1.0–1.2).\n\n"
+
+            "How to detect the FULL overlap robustly:\n"
+            "1) Normalize widths if necessary (conceptually align columns). Compare in grayscale.\n"
+            "2) Use MULTI-ANCHOR matching: identify at least TWO distinct matching horizontal rows (e.g., item lines, separators) at the bottom of image 1 and the top of image 2 with consistent vertical spacing.\n"
+            "3) Sweep candidate band heights K over a practical range (e.g., 50..400 px depending on scale). For each K, compare LAST K rows of image 1 with FIRST K rows of image 2.\n"
+            "5) EXPAND the matched band upward/downward to include ALL consecutive duplicated rows until the first line that diverges (the first NEW row on image 2).\n"
+            "6) Sanity check at the crop boundary: the first visible row AFTER cropping on image 2 must NOT appear at the end of image 1 (no partial duplicates cut).\n"
+            "7) If the match is uncertain or extremely short, set crop_pixels_from_top = 0.\n\n"
+
+            "Bias and validation:\n"
+            "- Ensure rotations remain one of {0,90,180,270}; do not invent other angles.\n"
+            "- Keep enhancement values conservative to avoid artifacts.\n\n"
+
+            "Formatting rules:\n"
+            "- Return only the JSON object matching the schema above.\n"
+            "- Do not add comments, markdown, trailing commas, or extra keys.\n"
+            "- Use numbers (not strings) for numeric fields.\n"
         )
-
-    def format_stitching_request(self, image1_b64: str, image2_b64: str) -> list:
-        """
-            Format the complete request for LLM with system prompt and images.
-
-            Args:
-                image1_b64: Base64 encoded first (top) image
-                image2_b64: Base64 encoded second (bottom) image
-
-            Returns:
-                List of message dicts formatted for the LLM API
-        """
-
-        system_prompt = self.get_stitching_analysis_prompt()
-
-        # Format for OpenAI/Claude style API
-        return [
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "Please analyze these two receipt photos and provide a stitching plan."
-                    },
-                    {
-                        "type": "image",
-                        "image": f"data:image/jpeg;base64,{image1_b64}"
-                    },
-                    {
-                        "type": "image",
-                        "image": f"data:image/jpeg;base64,{image2_b64}"
-                    }
-                ]
-            }
-        ]

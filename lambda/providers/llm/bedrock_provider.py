@@ -68,3 +68,33 @@ class BedrockProvider(LLMProvider):
             ]
         }]
         return self._invoke_model(messages, max_tokens)
+
+    def analyze_images_for_stitching(self, first_image_b64: str, second_image_b64: str, prompt: str, max_tokens: int = 3000) -> Optional[LLMResponse]:
+        """Analyze two images for stitching plan generation"""
+
+        logger.info(f"Analyzing images for stitching with llm: {self.model_id}")
+
+        messages = [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt},
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/jpeg",
+                        "data": first_image_b64
+                    }
+                },
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/jpeg",
+                        "data": second_image_b64
+                    }
+                }
+            ]
+        }]
+
+        return self._invoke_model(messages, max_tokens)

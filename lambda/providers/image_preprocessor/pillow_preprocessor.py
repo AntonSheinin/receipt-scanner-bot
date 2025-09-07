@@ -55,17 +55,7 @@ class IntelligentReceiptStitcher:
 
     @staticmethod
     def stitch_with_plan(img1_bytes: bytes, img2_bytes: bytes, plan: StitchingPlan) -> bytes:
-        """
-        Execute stitching according to LLM-generated plan.
-
-        Args:
-            img1_bytes: First (top) image bytes
-            img2_bytes: Second (bottom) image bytes
-            plan: Validated stitching plan from LLM
-
-        Returns:
-            Stitched and processed image as JPEG bytes
-        """
+        """Execute stitching according to LLM-generated plan."""
         logger.info(f"Executing stitching plan: {plan}")
 
         try:
@@ -82,11 +72,10 @@ class IntelligentReceiptStitcher:
                 img2 = IntelligentReceiptStitcher._rotate_image(img2, plan.bottom_rotate_deg)
                 logger.info(f"Rotated bottom image by {plan.bottom_rotate_deg} degrees")
 
-            # Detect and remove overlap
-            img2_cropped = IntelligentReceiptStitcher._remove_overlap(
-                img1, img2,
-                plan.min_overlap_px,
-                plan.max_overlap_px
+            # Remove exact overlap - no CV detection needed
+            img2_cropped = IntelligentReceiptStitcher._remove_overlap_precise(
+                img2,
+                plan.crop_pixels_from_top
             )
 
             # Stitch images
@@ -100,14 +89,11 @@ class IntelligentReceiptStitcher:
                     plan.enhance_contrast,
                     plan.enhance_brightness
                 )
-                logger.info(f"Applied enhancements: contrast={plan.enhance_contrast}, brightness={plan.enhance_brightness}")
 
             # Crop background if threshold specified
             if plan.background_threshold is not None:
                 stitched = IntelligentReceiptStitcher._crop_background(stitched, plan.background_threshold)
-                logger.info(f"Cropped background with threshold {plan.background_threshold}")
 
-            # Convert to JPEG bytes
             return IntelligentReceiptStitcher._cv2_to_bytes(stitched)
 
         except Exception as e:
@@ -151,51 +137,35 @@ class IntelligentReceiptStitcher:
             return img  # No rotation for 0 degrees
 
     @staticmethod
-    def _remove_overlap(img1: np.ndarray, img2: np.ndarray,
-                       min_overlap: int, max_overlap: int) -> np.ndarray:
+    def _remove_overlap_precise(img2: np.ndarray, crop_pixels: int) -> np.ndarray:
         """
-        Detect and remove overlap from second image within specified bounds.
+        Remove exact number of pixels from top of second image as detected by LLM.
 
         Args:
-            img1: First (top) image
             img2: Second (bottom) image
-            min_overlap: Minimum expected overlap in pixels
-            max_overlap: Maximum expected overlap in pixels
+            crop_pixels: Exact pixels to crop from top (from LLM analysis)
 
         Returns:
-            Cropped second image with overlap removed
+            Cropped second image
         """
-        best_match = {"score": 0, "position": 0, "template_size": 0}
-
-        # Try different template sizes within the specified range
-        for template_size in range(min_overlap, min(max_overlap + 1, img1.shape[0] // 2)):
-            # Get bottom portion of first image as template
-            template = cv2.cvtColor(img1[-template_size:], cv2.COLOR_BGR2GRAY)
-
-            # Convert second image to grayscale
-            img2_gray = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
-
-            # Perform template matching
-            result = cv2.matchTemplate(img2_gray, template, cv2.TM_CCOEFF_NORMED)
-            _, max_val, _, max_loc = cv2.minMaxLoc(result)
-
-            # Keep track of best match
-            if max_val > best_match["score"]:
-                best_match = {
-                    "score": max_val,
-                    "position": max_loc[1],
-                    "template_size": template_size
-                }
-
-        # If good match found at the top of second image, remove overlap
-        if best_match["score"] > 0.6 and best_match["position"] < img2.shape[0] * 0.3:
-            crop_point = best_match["position"] + best_match["template_size"]
-            logger.info(f"Overlap detected: score={best_match['score']:.2f}, "
-                       f"removing {crop_point}px from second image")
-            return img2[crop_point:]
-        else:
-            logger.info(f"No significant overlap detected (best score={best_match['score']:.2f})")
+        if crop_pixels <= 0:
+            logger.info("No overlap detected by LLM - no cropping needed")
             return img2
+
+        if crop_pixels >= img2.shape[0]:
+            logger.error(f"LLM detected crop pixels ({crop_pixels}) >= image height ({img2.shape[0]})")
+            logger.error("This indicates either LLM analysis error or corrupted image dimensions")
+            raise ValueError(
+                f"Cannot crop {crop_pixels} pixels from image with height {img2.shape[0]}. "
+                f"LLM analysis may be incorrect or image corrupted."
+            )
+
+        # Crop exactly what LLM detected
+        cropped = img2[crop_pixels:]
+        logger.info(f"LLM-directed precise crop: removed {crop_pixels}px from top of second image")
+        logger.info(f"Image dimensions: {img2.shape} -> {cropped.shape}")
+
+        return cropped
 
     @staticmethod
     def _apply_enhancements(img: np.ndarray, contrast: float, brightness: float) -> np.ndarray:
@@ -258,186 +228,124 @@ class IntelligentReceiptStitcher:
             return img
 
 
+@dataclass
+class MatchResult:
+    overlap: int
+    score: float
 
+class IntelligentReceiptStitcherAlt:
+    """
+    Deterministic executor for the LLM StitchingPlan.
+    - Rotates images (90° steps)
+    - Searches vertical overlap in [min_overlap_px, max_overlap_px]
+    - Stitches with seam at best match (lowest MAD)
+    - Optional background crop
+    - Enhancement (contrast, brightness)
+    """
 
-class SimpleImageStitching:
-    """Simple image stitching utilities with optional overlap detection"""
-    @staticmethod
-    def stitch_receipts_from_bytes(image_bytes_list: list[bytes]) -> bytes:
-        """
-        Stitch multiple receipt images vertically with overlap detection.
+    def stitch_with_plan(self, img1_bytes: bytes, img2_bytes: bytes, plan: StitchingPlan) -> bytes:
+        top = Image.open(io.BytesIO(img1_bytes)).convert("RGB")
+        bottom = Image.open(io.BytesIO(img2_bytes)).convert("RGB")
 
-        Args:
-            image_bytes_list: List of image bytes
+        # Rotate in 90° steps
+        if plan.top_rotate_deg:
+            top = top.rotate(-plan.top_rotate_deg, expand=True)
+        if plan.bottom_rotate_deg:
+            bottom = bottom.rotate(-plan.bottom_rotate_deg, expand=True)
 
-        Returns:
-            Stitched image as JPEG bytes
-        """
-        if not image_bytes_list:
-            raise ValueError("No images provided for stitching")
+        # Normalize widths (small scale alignment to same width)
+        top, bottom = self._match_widths(top, bottom)
 
-        if len(image_bytes_list) == 1:
-            return image_bytes_list[0]
+        # Find overlap
+        best = self._find_best_vertical_overlap(top, bottom, plan.min_overlap_px, plan.max_overlap_px)
 
-        # Convert all images to OpenCV format
-        cv_images = [SimpleImageStitching._bytes_to_cv2(img_bytes)
-                     for img_bytes in image_bytes_list]
+        # Compose by removing overlap from bottom
+        stitched = self._compose_remove_overlap(top, bottom, best.overlap)
 
-        # Start with first image
-        stitched = cv_images[0]
+        # Optional background crop
+        if plan.background_threshold is not None:
+            stitched = self._crop_background_by_threshold(stitched, plan.background_threshold)
 
-        # Stitch remaining images with overlap detection
-        for img in cv_images[1:]:
-            stitched = SimpleImageStitching._stitch_with_overlap(stitched, img)
+        # Enhancements (order: contrast then brightness)
+        stitched = ImageEnhance.Contrast(stitched).enhance(plan.enhance_contrast)
+        stitched = ImageEnhance.Brightness(stitched).enhance(plan.enhance_brightness)
 
-        # Convert back to bytes (no preprocessing - keep original quality)
-        return SimpleImageStitching._cv2_to_bytes(stitched)
+        # Encode JPEG
+        out = io.BytesIO()
+        stitched.save(out, format="JPEG", quality=95, optimize=True)
+        return out.getvalue()
 
-    @staticmethod
-    def _bytes_to_cv2(image_bytes: bytes) -> np.ndarray:
-        """Convert image bytes to OpenCV format (BGR), respecting EXIF orientation"""
-        # Open with PIL first to handle EXIF
-        pil_img = Image.open(io.BytesIO(image_bytes))
-        pil_img = ImageOps.exif_transpose(pil_img)  # Respect EXIF orientation
+    # ---------- helpers ----------
 
-        # Convert to RGB if needed
-        if pil_img.mode != "RGB":
-            pil_img = pil_img.convert("RGB")
-
-        # Convert to numpy array
-        arr = np.array(pil_img)
-
-        # Convert RGB to BGR for OpenCV
-        bgr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
-
-        # Auto-rotate if landscape (receipts should be portrait)
-        h, w = bgr.shape[:2]
-        if w > h:
-            bgr = cv2.rotate(bgr, cv2.ROTATE_90_CLOCKWISE)
-
-        return bgr
-
-    @staticmethod
-    def _cv2_to_bytes(cv_img: np.ndarray, quality: int = 95) -> bytes:
-        """Convert OpenCV image to JPEG bytes"""
-        success, buffer = cv2.imencode('.jpg', cv_img, [cv2.IMWRITE_JPEG_QUALITY, quality])
-        if not success:
-            raise ValueError("Failed to encode image")
-        return buffer.tobytes()
-
-    @staticmethod
-    def _stitch_with_overlap(img1: np.ndarray, img2: np.ndarray) -> np.ndarray:
-        """
-        Stitch two images with overlap detection using the original algorithm.
-        Simple and direct approach that works well for receipts.
-        """
-        # Use a safe slice height (min of 200 or 1/4 of current height)
-        slice_h = max(40, min(200, img1.shape[0] // 4))
-
-        # Get bottom slice of first image as template
-        template = cv2.cvtColor(img1[-slice_h:], cv2.COLOR_BGR2GRAY)
-
-        # Convert second image to grayscale
-        gray_img = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
-
-        # Find template in second image
-        res = cv2.matchTemplate(gray_img, template, cv2.TM_CCOEFF_NORMED)
-        _, max_val, _, max_loc = cv2.minMaxLoc(res)
-
-        # CRITICAL: Only consider it overlap if match is at the TOP of image2
-        # Real overlap should be within the first 30% of the second image
-        if max_loc[1] < img2.shape[0] * 0.3:
-            # This looks like real overlap
-            y_offset = max_loc[1] + template.shape[0]
-            logger.info(f"Overlap detected: match at y={max_loc[1]}, confidence={max_val:.2f}, "
-                       f"removing {y_offset}px from top of second image")
+    def _match_widths(self, top: Image.Image, bottom: Image.Image) -> Tuple[Image.Image, Image.Image]:
+        tw, bw = top.width, bottom.width
+        if tw == bw:
+            return top, bottom
+        # If widths differ <=5%, scale the narrower to match the wider to stabilize overlap search
+        if abs(tw - bw) / max(tw, bw) <= 0.05:
+            target = max(tw, bw)
+            if tw < target:
+                top = top.resize((target, int(top.height * target / tw)), Image.Resampling.BICUBIC)
+            if bw < target:
+                bottom = bottom.resize((target, int(bottom.height * target / bw)), Image.Resampling.BICUBIC)
         else:
-            # Match is too far down - probably false positive
-            y_offset = 0
-            logger.info(f"No overlap: match at y={max_loc[1]} is too far down (confidence={max_val:.2f})")
+            # Otherwise pad the narrower with white margins to match widths (avoids distortion)
+            target = max(tw, bw)
+            top = ImageOps.pad(top, (target, top.height), color="white", centering=(0.5, 0))
+            bottom = ImageOps.pad(bottom, (target, bottom.height), color="white", centering=(0.5, 0))
+        return top, bottom
 
-        # Crop second image from where overlap ends
-        img_cropped = img2[y_offset:] if y_offset > 0 else img2
+    def _find_best_vertical_overlap(
+        self, top: Image.Image, bottom: Image.Image, min_ov: int, max_ov: int
+    ) -> MatchResult:
+        top_np = np.asarray(top.convert("L"))
+        bot_np = np.asarray(bottom.convert("L"))
+        # Clip search window to actual image sizes
+        min_ov = int(max(10, min_ov))
+        max_ov = int(min(max_ov, min(top_np.shape[0], bot_np.shape[0], 4000)))
 
-        # Concatenate vertically
-        return cv2.vconcat([img1, img_cropped])
+        # Compare the last `k` rows of top to first `k` rows of bottom using Mean Absolute Difference
+        best_k, best_score = min_ov, float("inf")
+        for k in range(min_ov, max_ov + 1):
+            t_band = top_np[-k:, :]
+            b_band = bot_np[:k, :]
+            # Normalize widths if padding caused slight differences
+            m = min(t_band.shape[1], b_band.shape[1])
+            score = np.mean(np.abs(t_band[:, :m].astype(np.int16) - b_band[:, :m].astype(np.int16)))
+            if score < best_score:
+                best_k, best_score = k, score
 
+        return MatchResult(overlap=best_k, score=best_score)
 
-class ImageStitchingAndPreprocessing:
-    @staticmethod
-    def _load_cv2_with_exif(path: str) -> np.ndarray:
-        """Read image honoring EXIF orientation and return BGR for OpenCV."""
-        pil = Image.open(path)
-        pil = ImageOps.exif_transpose(pil)       # respect EXIF orientation
-        if pil.mode not in ("RGB", "L"):
-            pil = pil.convert("RGB")
-        arr = np.array(pil)
-        if arr.ndim == 2:
-            arr = cv2.cvtColor(arr, cv2.COLOR_GRAY2BGR)
-        else:
-            arr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
+    def _compose_remove_overlap(self, top: Image.Image, bottom: Image.Image, overlap: int) -> Image.Image:
+        w = max(top.width, bottom.width)
+        # Ensure same width (pad if needed)
+        if top.width != w:
+            top = ImageOps.pad(top, (w, top.height), color="white", centering=(0.5, 0))
+        if bottom.width != w:
+            bottom = ImageOps.pad(bottom, (w, bottom.height), color="white", centering=(0.5, 0))
+        # Crop away the overlapping rows from the top of bottom
+        bottom_cropped = bottom.crop((0, overlap, w, bottom.height))
+        # Stack
+        out = Image.new("RGB", (w, top.height + bottom_cropped.height), "white")
+        out.paste(top, (0, 0))
+        out.paste(bottom_cropped, (0, top.height))
+        return out
 
-        # Heuristic: receipts should be portrait; rotate if clearly landscape
-        h, w = arr.shape[:2]
-        if w > h:
-            arr = cv2.rotate(arr, cv2.ROTATE_90_CLOCKWISE)
-        return arr
-
-    @staticmethod
-    def stitch_receipts(img_paths):
-        """Stitch multiple receipt images vertically with overlap detection."""
-        stitched = None
-        for path in img_paths:
-            img = ImageStitchingAndPreprocessing._load_cv2_with_exif(path)
-            if stitched is None:
-                stitched = img
-                continue
-
-            # use a safe slice height (min of 200 or 1/4 of current height)
-            slice_h = max(40, min(200, stitched.shape[0] // 4))
-            template = cv2.cvtColor(stitched[-slice_h:], cv2.COLOR_BGR2GRAY)
-            gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-            res = cv2.matchTemplate(gray_img, template, cv2.TM_CCOEFF_NORMED)
-            _, _, _, max_loc = cv2.minMaxLoc(res)
-            y_offset = max_loc[1] + template.shape[0]
-
-            img_cropped = img[y_offset:] if y_offset < img.shape[0] else img
-            stitched = cv2.vconcat([stitched, img_cropped])
-
-        return stitched
-
-    @staticmethod
-    def deskew_image(cv_img, max_correction_deg: float = 12.0):
-        """Deskew but clamp extreme angles to avoid accidental 90° flips."""
-        gray = cv_img if cv_img.ndim == 2 else cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
-        gray_inv = cv2.bitwise_not(gray)
-        thresh = cv2.threshold(gray_inv, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-
-        coords = np.column_stack(np.where(thresh > 0))
-        if coords.size == 0:
-            return cv_img  # nothing to compute, return as-is
-
-        angle = cv2.minAreaRect(coords)[-1]
-        angle = -(90 + angle) if angle < -45 else -angle
-
-        if abs(angle) > max_correction_deg:
-            angle = 0.0  # too big, likely wrong; don't rotate
-
-        (h, w) = cv_img.shape[:2]
-        M = cv2.getRotationMatrix2D((w // 2, h // 2), angle, 1.0)
-        return cv2.warpAffine(cv_img, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
-
-    @staticmethod
-    def preprocess_for_ocr(cv_img):
-        gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
-        denoised = cv2.GaussianBlur(gray, (3, 3), 0)
-        thresh = cv2.adaptiveThreshold(
-            denoised, 255,
-            cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
-        )
-        pil_img = Image.fromarray(thresh)
-        return ImageOps.autocontrast(pil_img, cutoff=2)
+    def _crop_background_by_threshold(self, img: Image.Image, thr: int) -> Image.Image:
+        gray = np.asarray(img.convert("L"))
+        mask = gray < thr  # True where content is darker than background
+        rows = np.where(mask.any(axis=1))[0]
+        cols = np.where(mask.any(axis=0))[0]
+        if rows.size == 0 or cols.size == 0:
+            return img
+        y0, y1 = int(rows.min()), int(rows.max())
+        x0, x1 = int(cols.min()), int(cols.max())
+        # Add a tiny margin back to avoid cutting characters
+        pad = 6
+        x0 = max(0, x0 - pad); y0 = max(0, y0 - pad)
+        x1 = min(img.width - 1, x1 + pad); y1 = min(img.height - 1, y1 + pad)
+        return img.crop((x0, y0, x1 + 1, y1 + 1))
 
 
 class ImagePreprocessorPillow:

@@ -32,11 +32,15 @@ class OCRResponse:
 class LLMProvider(ABC):
     @abstractmethod
     def generate_text(self, prompt: str, max_tokens: int = 1000) -> Optional[LLMResponse]:
-        pass
+        raise NotImplementedError
 
     @abstractmethod
     def analyze_image(self, image_data: bytes, prompt: str, max_tokens: int = 2000) -> Optional[LLMResponse]:
-        pass
+        raise NotImplementedError
+
+    def analyze_images_for_stitching(self, first_image_b64: str, second_image_b64: str, prompt: str, max_tokens: int = 3000) -> Optional[LLMResponse]:
+        """Analyze two images for stitching plan generation"""
+        raise NotImplementedError
 
 
 class OCRProvider(ABC):
